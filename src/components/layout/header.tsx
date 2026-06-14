@@ -20,16 +20,6 @@ export function Header() {
   const [email, setEmail] = useState<string>("")
   const [grupoNome, setGrupoNome] = useState<string>("Carregando...")
 
-  const [isPending, startTransition] = useTransition()
-
-  const handleLogout = () => {
-    startTransition(async () => {
-      // Usar a server action diretamente com transição resolve o erro de redirecionamento
-      const { logout } = await import('@/app/login/actions')
-      await logout()
-    })
-  }
-
   useEffect(() => {
     // Inicializa o tema baseado no HTML class
     setIsDark(document.documentElement.classList.contains("dark"))
@@ -108,8 +98,10 @@ export function Header() {
               Configurações do Grupo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
-              Sair
+            <DropdownMenuItem asChild>
+              <a href="/api/auth/logout" className="w-full text-left text-destructive focus:text-destructive cursor-pointer">
+                Sair
+              </a>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
