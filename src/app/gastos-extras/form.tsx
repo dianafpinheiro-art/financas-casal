@@ -130,7 +130,7 @@ export function GastosExtrasForm({ categorias }: { categorias: { id: string, nom
 
             <div className="space-y-2">
               <Label>Categoria</Label>
-              <Select value={categoriaId} onValueChange={(val) => setCategoriaId(val)}>
+              <Select value={categoriaId} onValueChange={(val) => setCategoriaId(val || '')}>
                 <SelectTrigger className="bg-background/50">
                   <SelectValue placeholder="Selecione a categoria" />
                 </SelectTrigger>
