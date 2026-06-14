@@ -1,7 +1,7 @@
 'use server'
 
 import { extrairTextoPdf } from '@/lib/parser/pdf'
-import { parseFaturaComClaude, ParseResult } from '@/lib/parser/claude'
+import { parseFaturaComClaude, ParseResult, ParsedTransaction } from '@/lib/parser/claude'
 import { createClient } from '@/lib/supabase/server'
 
 export async function processarUploadPdf(formData: FormData): Promise<{ success: boolean, message: string, data?: ParseResult }> {
