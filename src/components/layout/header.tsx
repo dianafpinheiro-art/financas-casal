@@ -17,6 +17,8 @@ import { useEffect, useState } from "react"
 export function Header() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(true)
+  const [email, setEmail] = useState<string>("")
+  const [grupoNome, setGrupoNome] = useState<string>("Carregando...")
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -27,6 +29,22 @@ export function Header() {
   useEffect(() => {
     // Inicializa o tema baseado no HTML class
     setIsDark(document.documentElement.classList.contains("dark"))
+
+    const fetchUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setEmail(user.email || "")
+        const { data: membros } = await supabase.from('membros').select('grupos(nome)').eq('user_id', user.id).limit(1)
+        if (membros && membros.length > 0 && membros[0].grupos) {
+          const gruposObj: any = membros[0].grupos
+          setGrupoNome(Array.isArray(gruposObj) ? gruposObj[0]?.nome : gruposObj.nome)
+        } else {
+          setGrupoNome("Sem Grupo")
+        }
+      }
+    }
+    fetchUser()
   }, [])
 
   const toggleTheme = () => {
@@ -72,9 +90,9 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">Diana & Nicco</p>
+                <p className="text-sm font-medium leading-none">{grupoNome}</p>
                 <p className="text-xs leading-none text-muted-foreground">
-                  casal@exemplo.com
+                  {email}
                 </p>
               </div>
             </DropdownMenuLabel>

@@ -41,8 +41,8 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
     )
   }
 
-  const { saldoFinal, totalDianaPagou, totalGasto, totalNiccoPagou, totalReembolsosNicco, totalReembolsosDiana } = fechamento
-
+  const { saldoFinal, membro1, membro2 } = fechamento
+  const totalGasto = membro1.totalGasto
   return (
     <div className="max-w-5xl mx-auto space-y-8 print:space-y-4">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -70,34 +70,34 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Faturas da Diana</CardTitle>
+            <CardTitle className="text-sm font-medium">Faturas ({membro1.nome})</CardTitle>
             <CreditCard className="h-4 w-4 text-pink-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatarCentavosParaReal(totalDianaPagou)}</div>
+            <div className="text-2xl font-bold">{formatarCentavosParaReal(membro1.totalPago)}</div>
             <p className="text-xs text-muted-foreground">
-              Total pago pelos cartões dela
+              Total pago pelos cartões desta pessoa
             </p>
-            {totalReembolsosDiana > 0 && (
+            {membro1.totalReembolsos > 0 && (
               <p className="text-[10px] text-green-600 font-medium mt-1">
-                + {formatarCentavosParaReal(totalReembolsosDiana)} em reembolsos
+                + {formatarCentavosParaReal(membro1.totalReembolsos)} em reembolsos
               </p>
             )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Faturas do Nicco</CardTitle>
+            <CardTitle className="text-sm font-medium">Faturas ({membro2.nome})</CardTitle>
             <CreditCard className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatarCentavosParaReal(totalNiccoPagou)}</div>
+            <div className="text-2xl font-bold">{formatarCentavosParaReal(membro2.totalPago)}</div>
             <p className="text-xs text-muted-foreground">
-              Total pago pelos cartões dele
+              Total pago pelos cartões desta pessoa
             </p>
-            {totalReembolsosNicco > 0 && (
+            {membro2.totalReembolsos > 0 && (
               <p className="text-[10px] text-green-600 font-medium mt-1">
-                + {formatarCentavosParaReal(totalReembolsosNicco)} em reembolsos
+                + {formatarCentavosParaReal(membro2.totalReembolsos)} em reembolsos
               </p>
             )}
           </CardContent>
@@ -127,7 +127,11 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
       </div>
 
       <div className="print:hidden">
-        <ResumoParcelados lancamentosMes={todosLancamentos.filter(l => l.data_competencia?.startsWith(mes))} />
+        <ResumoParcelados 
+          lancamentosMes={todosLancamentos.filter(l => l.data_competencia?.startsWith(mes))} 
+          membro1Nome={membro1.nome}
+          membro2Nome={membro2.nome}
+        />
       </div>
 
       {/* Destaque do Acerto */}
@@ -137,19 +141,19 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
           <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl mb-4">
             O Veredito do Mês
           </h2>
-          {saldoFinal.quemPaga === 'Nenhum' ? (
+          {saldoFinal.quemPagaNome === 'Nenhum' ? (
             <div className="text-4xl md:text-6xl font-black text-green-500 my-8 drop-shadow-sm">
               Tudo zerado! Ninguém deve nada.
             </div>
           ) : (
             <>
             <div className="flex items-center justify-center gap-4 text-3xl md:text-5xl font-bold">
-              <span className={saldoFinal.quemPaga === 'Diana' ? 'text-pink-500' : 'text-blue-500'}>
-                {saldoFinal.quemPaga}
+              <span className={saldoFinal.quemPagaId === membro1.id ? 'text-pink-500' : 'text-blue-500'}>
+                {saldoFinal.quemPagaNome}
               </span>
               <ArrowRightLeft className="w-8 h-8 text-muted-foreground animate-pulse" />
-              <span className={saldoFinal.quemRecebe === 'Diana' ? 'text-pink-500' : 'text-blue-500'}>
-                {saldoFinal.quemRecebe}
+              <span className={saldoFinal.quemRecebeId === membro1.id ? 'text-pink-500' : 'text-blue-500'}>
+                {saldoFinal.quemRecebeNome}
               </span>
             </div>
             
@@ -158,8 +162,8 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
             </div>
             
             <div className="mt-6 text-lg text-muted-foreground max-w-[500px] mx-auto mb-8">
-              <p>Pix no capricho! {saldoFinal.quemPaga} deve transferir {formatarCentavosParaReal(saldoFinal.valor)} para {saldoFinal.quemRecebe} para fechar a conta do mês.</p>
-              {(totalReembolsosNicco > 0 || totalReembolsosDiana > 0) && (
+              <p>Pix no capricho! {saldoFinal.quemPagaNome} deve transferir {formatarCentavosParaReal(saldoFinal.valor)} para {saldoFinal.quemRecebeNome} para fechar a conta do mês.</p>
+              {(membro1.totalReembolsos > 0 || membro2.totalReembolsos > 0) && (
                 <p className="text-sm mt-2 font-medium text-primary bg-primary/10 p-2 rounded-md">
                   💡 Este valor já contabiliza os créditos de reembolsos médicos do mês!
                 </p>
