@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useTransition } from "react"
 
 export function Header() {
   const router = useRouter()
@@ -20,10 +20,14 @@ export function Header() {
   const [email, setEmail] = useState<string>("")
   const [grupoNome, setGrupoNome] = useState<string>("Carregando...")
 
-  const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = "/login"
+  const [isPending, startTransition] = useTransition()
+
+  const handleLogout = () => {
+    startTransition(async () => {
+      // Usar a server action diretamente com transição resolve o erro de redirecionamento
+      const { logout } = await import('@/app/login/actions')
+      await logout()
+    })
   }
 
   useEffect(() => {
