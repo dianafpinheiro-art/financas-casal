@@ -75,7 +75,7 @@ export function GraficoCategorias({ lancamentos, categorias = [] }: { lancamento
             <CardTitle>Gastos por Categoria</CardTitle>
             <CardDescription>Clique em uma fatia para ver os detalhes</CardDescription>
           </div>
-          <Select value={cartaoSelecionado} onValueChange={setCartaoSelecionado}>
+          <Select value={cartaoSelecionado} onValueChange={(val) => setCartaoSelecionado(val || 'todos')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Selecione o cartão" />
             </SelectTrigger>
@@ -106,9 +106,9 @@ export function GraficoCategorias({ lancamentos, categorias = [] }: { lancamento
                   paddingAngle={2}
                   dataKey="valor"
                   nameKey="nome"
-                  onClick={(data) => setCategoriaAberta(data.nome)}
+                  onClick={(data: any) => setCategoriaAberta(data.payload?.nome || data.nome || data.name)}
                   style={{ cursor: 'pointer' }}
-                  label={({ nome, percent }) => {
+                  label={({ nome, percent }: any) => {
                     if (percent < 0.04) return null
                     return `${nome.substring(0, 15)}${nome.length > 15 ? '...' : ''} (${(percent * 100).toFixed(0)}%)`
                   }}
@@ -119,7 +119,7 @@ export function GraficoCategorias({ lancamentos, categorias = [] }: { lancamento
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => formatarCentavosParaReal(value)}
+                  formatter={(value: any) => formatarCentavosParaReal(value || 0)}
                 />
               </PieChart>
             </ResponsiveContainer>

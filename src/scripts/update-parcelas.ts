@@ -29,7 +29,7 @@ async function runUpdate() {
   let updatedCount = 0
 
   // O match não é 100% garantido sem ID único, mas vamos tentar parear pela descrição + valor exato
-  for (const raw of lancamentosRaw) {
+  for (const raw of lancamentosRaw as any[]) {
     const pAtual = raw.parcela_atual !== 'null' ? parseInt(raw.parcela_atual) : null
     const pTotal = raw.parcela_total !== 'null' ? parseInt(raw.parcela_total) : null
     

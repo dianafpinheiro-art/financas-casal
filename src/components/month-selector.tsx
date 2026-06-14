@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export function MonthSelector({ currentMonth }: { currentMonth: string }) {
   const router = useRouter()
   
-  const handleValueChange = (value: string) => {
+  const handleValueChange = (value: string | null) => {
+    if (!value) return
     // Navigate to the current page with the new month parameter
     router.push(`/?mes=${value}`)
   }

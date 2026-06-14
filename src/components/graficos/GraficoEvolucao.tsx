@@ -41,7 +41,7 @@ export function GraficoEvolucao({ lancamentos }: { lancamentos: any[] }) {
             <CardTitle>Evolução Mensal</CardTitle>
             <CardDescription>Histórico de gastos ao longo do tempo</CardDescription>
           </div>
-          <Select value={cartaoSelecionado} onValueChange={setCartaoSelecionado}>
+          <Select value={cartaoSelecionado} onValueChange={(val) => setCartaoSelecionado(val || 'todos')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Selecione o cartão" />
             </SelectTrigger>
@@ -77,7 +77,7 @@ export function GraficoEvolucao({ lancamentos }: { lancamentos: any[] }) {
                   width={80}
                 />
                 <Tooltip 
-                  formatter={(value: number) => formatarCentavosParaReal(value)}
+                  formatter={(value: any) => formatarCentavosParaReal(value || 0)}
                   labelFormatter={(val) => `Mês: ${val}`}
                   cursor={{fill: 'transparent'}}
                 />

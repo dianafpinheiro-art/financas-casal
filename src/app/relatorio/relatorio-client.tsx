@@ -87,7 +87,7 @@ export function RelatorioClient({ lancamentos, mes }: { lancamentos: any[], mes:
       <div className="flex flex-wrap gap-4 mb-8 p-4 bg-muted/20 rounded-lg border print:hidden">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">Responsável</label>
-          <Select value={filtroResponsavel} onValueChange={setFiltroResponsavel}>
+          <Select value={filtroResponsavel} onValueChange={(val) => setFiltroResponsavel(val || 'todos')}>
             <SelectTrigger className="w-[160px] h-8 text-sm bg-white">
               <SelectValue placeholder="Responsável" />
             </SelectTrigger>
@@ -101,7 +101,7 @@ export function RelatorioClient({ lancamentos, mes }: { lancamentos: any[], mes:
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">Cartão / Origem</label>
-          <Select value={filtroCartao} onValueChange={setFiltroCartao}>
+          <Select value={filtroCartao} onValueChange={(val) => setFiltroCartao(val || 'todos')}>
             <SelectTrigger className="w-[180px] h-8 text-sm bg-white">
               <SelectValue placeholder="Selecione..." />
             </SelectTrigger>
@@ -117,7 +117,7 @@ export function RelatorioClient({ lancamentos, mes }: { lancamentos: any[], mes:
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">Tipo de Compra</label>
-          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+          <Select value={filtroTipo} onValueChange={(val) => setFiltroTipo(val || 'todos')}>
             <SelectTrigger className="w-[160px] h-8 text-sm bg-white">
               <SelectValue placeholder="Qualquer tipo" />
             </SelectTrigger>
