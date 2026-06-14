@@ -78,8 +78,12 @@ export function Header() {
               Configurações do Grupo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive cursor-pointer">
-              Sair
+            <DropdownMenuItem asChild className="text-destructive focus:text-destructive cursor-pointer">
+              <form action={logout} className="w-full">
+                <button type="submit" className="w-full text-left">
+                  Sair
+                </button>
+              </form>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
