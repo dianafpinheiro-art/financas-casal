@@ -99,7 +99,11 @@ export function Header() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <div 
-              onClick={() => window.location.href = "/api/auth/logout"} 
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                window.location.href = "/api/auth/logout";
+              }} 
               className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-destructive focus:bg-accent focus:text-destructive text-destructive w-full"
             >
               Sair
