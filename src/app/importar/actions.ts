@@ -63,22 +63,46 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
     // Se o cartão não tiver dono atrelado, pega a Diana por default no MVP
     const pagoPorId = cartao?.membro_id || '0151cf3f-23cf-4294-9b10-2ceb90e9bf1d'
 
+    // Pega todas as regras da IA cadastradas
+    const { data: regras } = await supabase.from('regras_aprendidas').select('*')
+    const regrasAtivas = regras || []
+
     const baseTime = Date.now()
-    const payload = transacoes.map((t, index) => ({
-      grupo_id: grupo.id,
-      cartao_id: cartaoId,
-      pago_por_id: pagoPorId,
-      data_lancamento: t.data, // Preenche a data_lancamento para não dar Invalid Date!
-      data_competencia: t.data, // Usa a mesma data para competência
-      descricao: t.descricao,
-      valor: t.valor_cents,
-      parcela_atual: t.parcela_atual || null,
-      parcela_total: t.parcela_total || null,
-      divisao_tipo: 'nao_classificado',
-      divisao_pct_diana: 50,
-      classificado: false,
-      criado_em: new Date(baseTime + index * 1000).toISOString()
-    }))
+    const payload = transacoes.map((t, index) => {
+      // Tenta encontrar uma regra que bata com a descrição
+      const regraEncontrada = regrasAtivas.find(r => 
+        t.descricao.toUpperCase().includes(r.merchant.toUpperCase())
+      )
+
+      let divisaoTipo = 'nao_classificado'
+      let divisaoPct = 50
+      let classificado = false
+      let categoriaId = null
+
+      if (regraEncontrada) {
+        divisaoTipo = regraEncontrada.divisao_tipo
+        divisaoPct = regraEncontrada.divisao_pct_diana
+        categoriaId = regraEncontrada.categoria_id
+        classificado = true // Já cai classificado automaticamente!
+      }
+
+      return {
+        grupo_id: grupo.id,
+        cartao_id: cartaoId,
+        pago_por_id: pagoPorId,
+        data_lancamento: t.data,
+        data_competencia: t.data,
+        descricao: t.descricao,
+        valor: t.valor_cents,
+        parcela_atual: t.parcela_atual || null,
+        parcela_total: t.parcela_total || null,
+        divisao_tipo: divisaoTipo,
+        divisao_pct_diana: divisaoPct,
+        categoria_id: categoriaId,
+        classificado: classificado,
+        criado_em: new Date(baseTime + index * 1000).toISOString()
+      }
+    })
 
     const { error } = await supabase.from('lancamentos').insert(payload)
 
