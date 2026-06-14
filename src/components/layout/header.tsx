@@ -99,7 +99,7 @@ export function Header() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <div 
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 window.location.href = "/api/auth/logout";
