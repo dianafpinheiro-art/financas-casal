@@ -10,11 +10,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { logout } from "@/app/login/actions"
+import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 export function Header() {
+  const router = useRouter()
   const [isDark, setIsDark] = useState(true)
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/login")
+    router.refresh()
+  }
 
   useEffect(() => {
     // Inicializa o tema baseado no HTML class
@@ -78,12 +87,8 @@ export function Header() {
               Configurações do Grupo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="text-destructive focus:text-destructive cursor-pointer">
-              <form action={logout} className="w-full">
-                <button type="submit" className="w-full text-left">
-                  Sair
-                </button>
-              </form>
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
