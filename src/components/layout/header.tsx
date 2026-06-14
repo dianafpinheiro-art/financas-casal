@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { logout } from "@/app/login/actions"
 import { useEffect, useState } from "react"
 
 export function Header() {
@@ -77,7 +78,7 @@ export function Header() {
               Configurações do Grupo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive cursor-pointer">
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
