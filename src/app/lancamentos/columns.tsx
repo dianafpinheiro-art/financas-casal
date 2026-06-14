@@ -214,7 +214,8 @@ export const columns: ColumnDef<Lancamento>[] = [
         setValue(lancamento.categoria_id || "none")
       }, [lancamento.categoria_id])
 
-      async function handleValueChange(newValue: string) {
+      async function handleValueChange(newValue: string | null) {
+        if (!newValue) return;
         setIsPending(true)
         setValue(newValue)
         
@@ -271,7 +272,8 @@ export const columns: ColumnDef<Lancamento>[] = [
         'nao_classificado': { label: 'Pendente', color: 'bg-destructive/20 text-destructive' },
       }
 
-      async function handleValueChange(newValue: string) {
+      async function handleValueChange(newValue: string | null) {
+        if (!newValue) return;
         setIsPending(true)
         
         let customPct: number | undefined = undefined

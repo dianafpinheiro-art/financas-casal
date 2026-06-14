@@ -2,49 +2,6 @@ import { columns, Lancamento } from "./columns"
 import { DataTable } from "./data-table"
 import { createClient } from "@/lib/supabase/server"
 
-// Mock data until we plug the real DB fetch
-const mockData: Lancamento[] = [
-  {
-    id: "728ed52f",
-    data_lancamento: "2026-06-05T00:00:00Z",
-    descricao: "iFood *Restaurante",
-    valor: 4590, // R$ 45,90
-    categoria_nome: "Alimentação",
-    cartao_apelido: "BTG Pactual",
-    divisao_tipo: "dividir",
-    classificado: true,
-  },
-  {
-    id: "489e1d42",
-    data_lancamento: "2026-06-06T00:00:00Z",
-    descricao: "Uber *Trip",
-    valor: 2250, 
-    categoria_nome: "Transporte",
-    cartao_apelido: "Smiles Visa BB",
-    divisao_tipo: "so_diana",
-    classificado: true,
-  },
-  {
-    id: "921b7e88",
-    data_lancamento: "2026-06-08T00:00:00Z",
-    descricao: "Netflix.com",
-    valor: 5590, 
-    categoria_nome: "Assinaturas",
-    cartao_apelido: "Ourocard ELO",
-    divisao_tipo: "dividir",
-    classificado: true,
-  },
-  {
-    id: "123a4b56",
-    data_lancamento: "2026-06-10T00:00:00Z",
-    descricao: "PGTO ESTACIONAMENTO",
-    valor: 1500, 
-    categoria_nome: null,
-    cartao_apelido: "BTG Pactual",
-    divisao_tipo: "nao_classificado",
-    classificado: false,
-  },
-]
 
 export default async function LancamentosPage() {
   const supabase = await createClient()
