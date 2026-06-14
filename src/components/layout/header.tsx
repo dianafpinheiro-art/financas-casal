@@ -98,10 +98,8 @@ export function Header() {
               Configurações do Grupo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a href="/api/auth/logout" className="w-full text-left text-destructive focus:text-destructive cursor-pointer">
-                Sair
-              </a>
+            <DropdownMenuItem onClick={() => window.location.href = "/api/auth/logout"} className="text-destructive focus:text-destructive cursor-pointer">
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
