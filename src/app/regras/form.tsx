@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { salvarRegra, deletarRegra } from "./actions"
 import { Plus, Trash2, Edit } from "lucide-react"
 
-export function RegrasClient({ regras, categorias }: { regras: any[], categorias: any[] }) {
+export function RegrasClient({ regras, categorias, membro1Nome, membro2Nome }: { regras: any[], categorias: any[], membro1Nome: string, membro2Nome: string }) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -50,7 +50,7 @@ export function RegrasClient({ regras, categorias }: { regras: any[], categorias
     
     const payload = { ...formData, id: editId }
     if (payload.divisao_tipo !== "dividir") {
-      payload.divisao_pct_diana = payload.divisao_tipo === "diana" ? 100 : 0
+      payload.divisao_pct_diana = payload.divisao_tipo === "so_diana" ? 100 : 0
     } else if (payload.divisao_pct_diana == null) {
       payload.divisao_pct_diana = 50
     }
@@ -105,8 +105,8 @@ export function RegrasClient({ regras, categorias }: { regras: any[], categorias
                 <div>
                   Dono: <span className="font-medium text-foreground">
                     {r.divisao_tipo === 'dividir' 
-                      ? `Ambos (${r.divisao_pct_diana}% Diana)` 
-                      : (r.divisao_tipo === 'diana' ? 'Diana' : 'Nicco')}
+                      ? `Ambos (${r.divisao_pct_diana}% ${membro1Nome})` 
+                      : (r.divisao_tipo === 'so_diana' ? membro1Nome : membro2Nome)}
                   </span>
                 </div>
                 <div>Hits: {r.vezes_confirmada || 0}</div>
@@ -165,15 +165,15 @@ export function RegrasClient({ regras, categorias }: { regras: any[], categorias
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="dividir">Dividir entre o casal</SelectItem>
-                  <SelectItem value="diana">Apenas Diana</SelectItem>
-                  <SelectItem value="nicco">Apenas Nicco</SelectItem>
+                  <SelectItem value="so_diana">Apenas {membro1Nome}</SelectItem>
+                  <SelectItem value="so_nicco">Apenas {membro2Nome}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {formData.divisao_tipo === "dividir" && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">% da Diana</label>
+                <label className="text-sm font-medium">% da(o) {membro1Nome}</label>
                 <Input 
                   type="number" min="0" max="100" required 
                   value={formData.divisao_pct_diana ?? 50} 
