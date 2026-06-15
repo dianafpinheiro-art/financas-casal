@@ -11,19 +11,17 @@ export async function getCurrentGroupId(): Promise<string> {
     redirect('/login')
   }
 
-  // 2. Busca o grupo vinculado a esse usuário
-  const { data: grupo, error: grupoError } = await supabase
-    .from('grupos')
-    .select('id')
+  // 2. Busca o grupo vinculado a esse usuário via tabela membros
+  const { data: membro, error: membroError } = await supabase
+    .from('membros')
+    .select('grupo_id')
     .eq('user_id', user.id)
+    .limit(1)
     .single()
 
-  if (grupoError || !grupo) {
-    // Se não encontrou o grupo, provavelmente é um erro de integridade do cadastro
-    // Em um sistema real, poderíamos redirecionar para uma página de "Setup" da conta.
-    // Para simplificar, lança o erro que será capturado pelo error.js
+  if (membroError || !membro) {
     throw new Error('Grupo não encontrado para este usuário. Por favor, contate o suporte.')
   }
 
-  return grupo.id
+  return membro.grupo_id
 }
