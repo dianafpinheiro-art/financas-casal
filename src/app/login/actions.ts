@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 
 export async function login(formData: FormData) {
@@ -23,6 +24,10 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
+  if (process.env.ALLOW_PUBLIC_SIGNUP !== 'true') {
+    redirect('/login?message=Criacao de contas desativada.')
+  }
+
   const supabase = await createClient()
 
   const data = {
@@ -38,17 +43,29 @@ export async function signup(formData: FormData) {
 
   // Criação automática do Grupo e Membros (SaaS)
   if (authData.user) {
-    const { data: grupo, error: grupoErr } = await supabase
+    const grupoId = randomUUID()
+    const { error: grupoErr } = await supabase
       .from('grupos')
-      .insert({ nome: 'Nossa Casa', user_id: authData.user.id })
-      .select('id')
-      .single()
+      .insert({ id: grupoId, nome: 'Nossa Casa' })
 
-    if (!grupoErr && grupo) {
-      await supabase.from('membros').insert([
-        { grupo_id: grupo.id, apelido: 'Cônjuge 1', papel: 'admin' },
-        { grupo_id: grupo.id, apelido: 'Cônjuge 2', papel: 'membro' }
-      ])
+    if (grupoErr) {
+      redirect('/login?message=Erro ao criar grupo.')
+    }
+
+    const { error: membroErr } = await supabase
+      .from('membros')
+      .insert({ grupo_id: grupoId, user_id: authData.user.id, apelido: 'Cônjuge 1', papel: 'admin' })
+
+    if (membroErr) {
+      redirect('/login?message=Erro ao vincular usuario ao grupo.')
+    }
+
+    const { error: parceiroErr } = await supabase
+      .from('membros')
+      .insert({ grupo_id: grupoId, apelido: 'Cônjuge 2', papel: 'membro' })
+
+    if (parceiroErr) {
+      redirect('/login?message=Erro ao criar segundo membro do grupo.')
     }
   }
 

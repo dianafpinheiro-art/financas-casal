@@ -1,4 +1,4 @@
-import { login, signup } from './actions'
+import { login } from './actions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -60,9 +60,6 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
             <div className="flex flex-col gap-2 pt-2">
               <Button type="submit" formAction={login} className="w-full font-semibold shadow-md">
                 Entrar
-              </Button>
-              <Button formAction={signup} className="w-full" variant="outline">
-                Criar Nova Conta
               </Button>
             </div>
           </form>
