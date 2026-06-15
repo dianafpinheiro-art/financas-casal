@@ -13,7 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { logout } from "@/app/login/actions"
+import Link from "next/link"
 
 export function Header() {
   const router = useRouter()
@@ -22,7 +22,6 @@ export function Header() {
   const [grupoNome, setGrupoNome] = useState<string>("Carregando...")
 
   useEffect(() => {
-    // Inicializa o tema baseado no HTML class
     setIsDark(document.documentElement.classList.contains("dark"))
 
     const fetchUser = async () => {
@@ -98,14 +97,15 @@ export function Header() {
               Perfil & Ajustes
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <form action={logout}>
-              <button
-                type="submit"
-                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-destructive focus:bg-accent focus:text-destructive text-destructive w-full"
+            <DropdownMenuItem>
+              <Link
+                href="/api/auth/logout"
+                className="text-destructive w-full"
+                prefetch={false}
               >
                 Sair
-              </button>
-            </form>
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
