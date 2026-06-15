@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useState } from "react"
+import { logout } from "@/app/login/actions"
 
 export function Header() {
   const router = useRouter()
@@ -91,23 +92,20 @@ export function Header() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              Perfil
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              Configurações do Grupo
+            <DropdownMenuItem
+              onClick={() => router.push("/ajustes")}
+            >
+              Perfil & Ajustes
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <div 
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                window.location.href = "/api/auth/logout";
-              }} 
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-destructive focus:bg-accent focus:text-destructive text-destructive w-full"
-            >
-              Sair
-            </div>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-destructive focus:bg-accent focus:text-destructive text-destructive w-full"
+              >
+                Sair
+              </button>
+            </form>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

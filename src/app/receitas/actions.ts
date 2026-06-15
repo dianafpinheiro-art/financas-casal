@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export async function salvarReceita(payload: {
   membro_id: string
@@ -11,13 +12,10 @@ export async function salvarReceita(payload: {
 }) {
   try {
     const supabase = await createClient()
-
-    // Para o MVP, pega o primeiro grupo
-    const { data: grupo } = await supabase.from('grupos').select('id').limit(1).single()
-    if (!grupo) throw new Error("Grupo não encontrado")
+    const grupoId = await getCurrentGroupId()
 
     const { error } = await supabase.from('receitas').insert([{
-      grupo_id: grupo.id,
+      grupo_id: grupoId,
       membro_id: payload.membro_id,
       fonte: payload.fonte,
       valor: payload.valor_cents,
@@ -38,7 +36,8 @@ export async function salvarReceita(payload: {
 export async function deletarReceita(id: string) {
   try {
     const supabase = await createClient()
-    const { error } = await supabase.from('receitas').delete().eq('id', id)
+    const grupoId = await getCurrentGroupId()
+    const { error } = await supabase.from('receitas').delete().eq('id', id).eq('grupo_id', grupoId)
     
     if (error) throw error
 

@@ -1,10 +1,11 @@
 import { columns, Lancamento } from "./columns"
 import { DataTable } from "./data-table"
 import { createClient } from "@/lib/supabase/server"
-
+import { getCurrentGroupId } from "@/lib/auth/group"
 
 export default async function LancamentosPage() {
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
   
   // Buscar os dados reais do banco
   const { data: lancamentos, error } = await supabase
@@ -27,6 +28,7 @@ export default async function LancamentosPage() {
       cartoes ( apelido ),
       criado_em
     `)
+    .eq('grupo_id', grupoId)
     .order('criado_em', { ascending: true })
 
   // Formatar os dados para o formato esperado pela tabela
@@ -47,7 +49,7 @@ export default async function LancamentosPage() {
     parcela_total: l.parcela_total,
   }))
 
-  const { data: categoriasLista } = await supabase.from('categorias').select('id, nome').order('nome')
+  const { data: categoriasLista } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome')
 
   return (
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">

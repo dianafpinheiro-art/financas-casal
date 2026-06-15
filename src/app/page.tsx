@@ -1,3 +1,4 @@
+import { getCurrentGroupId } from "@/lib/auth/group"
 import { calcularFechamentoDoMes } from "@/lib/acerto/calcular"
 import { createClient } from "@/lib/supabase/server"
 import { formatarCentavosParaReal } from "@/lib/utils/centavos"
@@ -20,11 +21,12 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
   let categorias: any[] = []
 
   try {
+    const grupoId = await getCurrentGroupId()
     fechamento = await calcularFechamentoDoMes(mes)
     const supabase = await createClient()
-    const { data } = await supabase.from('lancamentos').select('*, cartoes(apelido), categorias(nome)')
+    const { data } = await supabase.from('lancamentos').select('*, cartoes(apelido), categorias(nome)').eq('grupo_id', grupoId)
     todosLancamentos = data || []
-    const { data: catData } = await supabase.from('categorias').select('id, nome').order('nome', { ascending: true })
+    const { data: catData } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome', { ascending: true })
     categorias = catData || []
   } catch (e: any) {
     errorMessage = e.message

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentGroupId } from "@/lib/auth/group"
 import { formatarCentavosParaReal } from "@/lib/utils/centavos"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,7 @@ import { MonthSelector } from "@/components/month-selector"
 async function adicionarReembolso(formData: FormData) {
   "use server"
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
 
   const descricao = formData.get("descricao") as string
   const valorReais = formData.get("valor") as string
@@ -22,6 +24,7 @@ async function adicionarReembolso(formData: FormData) {
   const valorCentavos = Math.round(parseFloat(valorReais.replace(',', '.')) * 100)
 
   await supabase.from("reembolsos").insert({
+    grupo_id: grupoId,
     descricao,
     valor: valorCentavos,
     data_competencia,
@@ -35,8 +38,9 @@ async function adicionarReembolso(formData: FormData) {
 async function deletarReembolso(formData: FormData) {
   "use server"
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
   const id = formData.get("id") as string
-  await supabase.from("reembolsos").delete().eq("id", id)
+  await supabase.from("reembolsos").delete().eq("id", id).eq("grupo_id", grupoId)
   revalidatePath('/reembolsos')
   revalidatePath('/')
 }
@@ -45,8 +49,9 @@ export default async function ReembolsosPage(props: { searchParams: Promise<{ me
   const searchParams = await props.searchParams
   const mes = searchParams.mes || "2026-06"
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
 
-  const { data: membros } = await supabase.from('membros').select('*')
+  const { data: membros } = await supabase.from('membros').select('*').eq('grupo_id', grupoId)
   
   const inicioMes = `${mes}-01`
   const [ano, numMes] = mes.split('-').map(Number)
@@ -57,6 +62,7 @@ export default async function ReembolsosPage(props: { searchParams: Promise<{ me
   const { data: reembolsos } = await supabase
     .from('reembolsos')
     .select('*, membros(apelido)')
+    .eq('grupo_id', grupoId)
     .gte('data_competencia', inicioMes)
     .lt('data_competencia', inicioProximoMes)
     .order('data_competencia', { ascending: false })

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export async function salvarGastoExtra(payload: {
   data_lancamento: string
@@ -13,18 +14,14 @@ export async function salvarGastoExtra(payload: {
 }) {
   try {
     const supabase = await createClient()
-
-    // Para o MVP, pega o primeiro grupo
-    const { data: grupo } = await supabase.from('grupos').select('id').limit(1).single()
-
-    if (!grupo) throw new Error("Grupo não encontrado")
+    const grupoId = await getCurrentGroupId()
 
     // Busca o ID do membro que pagou
-    const { data: membro } = await supabase.from('membros').select('id').eq('apelido', payload.quem_pagou).single()
+    const { data: membro } = await supabase.from('membros').select('id').eq('apelido', payload.quem_pagou).eq('grupo_id', grupoId).single()
     if (!membro) throw new Error("Membro não encontrado")
 
     const insertPayload = {
-      grupo_id: grupo.id,
+      grupo_id: grupoId,
       cartao_id: null, // Extra-cartão!
       pago_por_id: membro.id, // O pagador
       data_lancamento: payload.data_lancamento,

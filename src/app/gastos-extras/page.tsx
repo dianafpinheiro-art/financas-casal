@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentGroupId } from "@/lib/auth/group"
 import { GastosExtrasForm } from "./form"
 
 export default async function GastosExtrasPage() {
   const supabase = await createClient()
-  const { data: categorias } = await supabase.from('categorias').select('id, nome').order('nome')
+  const grupoId = await getCurrentGroupId()
+  const { data: categorias } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome')
 
   return (
     <div className="space-y-6">

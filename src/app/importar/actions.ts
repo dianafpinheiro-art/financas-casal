@@ -3,6 +3,7 @@
 import { extrairTextoPdf } from '@/lib/parser/pdf'
 import { parseFaturaComClaude, ParseResult, ParsedTransaction } from '@/lib/parser/claude'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export async function processarUploadPdf(formData: FormData): Promise<{ success: boolean, message: string, data?: ParseResult }> {
   try {
@@ -45,26 +46,28 @@ export async function processarUploadPdf(formData: FormData): Promise<{ success:
 
 export async function getCartoes() {
   const supabase = await createClient()
-  const { data } = await supabase.from('cartoes').select('id, apelido').order('apelido')
+  const grupoId = await getCurrentGroupId()
+  const { data } = await supabase.from('cartoes').select('id, apelido').eq('grupo_id', grupoId).order('apelido')
   return data || []
 }
 
 export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], cartaoId: string) {
   try {
     const supabase = await createClient()
-
-    // Para o MVP, pega o primeiro grupo
-    const { data: grupo } = await supabase.from('grupos').select('id').limit(1).single()
-
-    if (!grupo) throw new Error("Grupo não encontrado")
+    const grupoId = await getCurrentGroupId()
 
     // Descobrir o dono do cartão
-    const { data: cartao } = await supabase.from('cartoes').select('membro_id').eq('id', cartaoId).single()
-    // Se o cartão não tiver dono atrelado, pega a Diana por default no MVP
-    const pagoPorId = cartao?.membro_id || '0151cf3f-23cf-4294-9b10-2ceb90e9bf1d'
+    const { data: cartao } = await supabase.from('cartoes').select('membro_id').eq('id', cartaoId).eq('grupo_id', grupoId).single()
+    
+    // Se o cartão não tiver dono atrelado, precisamos pegar o admin (membro 1) do grupo como fallback
+    let pagoPorId = cartao?.membro_id
+    if (!pagoPorId) {
+      const { data: admin } = await supabase.from('membros').select('id').eq('grupo_id', grupoId).order('papel', { ascending: true }).limit(1).single()
+      pagoPorId = admin?.id
+    }
 
     // Pega todas as regras da IA cadastradas
-    const { data: regras } = await supabase.from('regras_aprendidas').select('*')
+    const { data: regras } = await supabase.from('regras_aprendidas').select('*').eq('grupo_id', grupoId)
     const regrasAtivas = regras || []
 
     const baseTime = Date.now()
@@ -87,7 +90,7 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
       }
 
       return {
-        grupo_id: grupo.id,
+        grupo_id: grupoId,
         cartao_id: cartaoId,
         pago_por_id: pagoPorId,
         data_lancamento: t.data,

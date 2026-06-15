@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export type FechamentoMes = {
   membro1: {
@@ -28,9 +29,14 @@ export type FechamentoMes = {
 
 export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<FechamentoMes> {
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
 
-  // Buscar os membros ordenados por data de criação para consistência
-  const { data: membros } = await supabase.from('membros').select('id, apelido').order('criado_em', { ascending: true })
+  // Buscar os membros ordenados por papel para consistência (admin primeiro)
+  const { data: membros } = await supabase
+    .from('membros')
+    .select('id, apelido')
+    .eq('grupo_id', grupoId)
+    .order('papel', { ascending: true })
   
   if (!membros || membros.length < 2) {
     throw new Error("São necessários no mínimo 2 membros no grupo para o cálculo.")
@@ -49,6 +55,7 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
   const { data: lancamentos, error } = await supabase
     .from('lancamentos')
     .select('*, cartoes(membro_id)')
+    .eq('grupo_id', grupoId)
     .gte('data_competencia', inicioMes)
     .lt('data_competencia', inicioProximoMes)
 
@@ -109,6 +116,7 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
   const { data: reembolsos, error: erroReembolsos } = await supabase
     .from('reembolsos')
     .select('*')
+    .eq('grupo_id', grupoId)
     .gte('data_competencia', inicioMes)
     .lt('data_competencia', inicioProximoMes)
 

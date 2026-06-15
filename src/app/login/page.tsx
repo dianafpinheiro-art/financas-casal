@@ -61,10 +61,9 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
               <Button type="submit" formAction={login} className="w-full font-semibold shadow-md">
                 Entrar
               </Button>
-              {/* Botão de Criar Conta desativado temporariamente para proteger o MVP monousuário */}
-              {/* <Button type="submit" formAction={signup} variant="outline" className="w-full">
-                Criar Conta
-              </Button> */}
+              <Button formAction={signup} className="w-full" variant="outline">
+                Criar Nova Conta
+              </Button>
             </div>
           </form>
         </CardContent>

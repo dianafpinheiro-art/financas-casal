@@ -2,22 +2,20 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export async function salvarCategoria(payload: any) {
   try {
     const supabase = await createClient()
-
-    // Pega o primeiro grupo para o MVP
-    const { data: grupo } = await supabase.from('grupos').select('id').limit(1).single()
-    if (!grupo) throw new Error("Grupo não encontrado")
+    const grupoId = await getCurrentGroupId()
 
     const dataToSave = {
       ...payload,
-      grupo_id: grupo.id
+      grupo_id: grupoId
     }
 
     if (payload.id) {
-      const { error } = await supabase.from('categorias').update(dataToSave).eq('id', payload.id)
+      const { error } = await supabase.from('categorias').update(dataToSave).eq('id', payload.id).eq('grupo_id', grupoId)
       if (error) throw error
     } else {
       const { error } = await supabase.from('categorias').insert([dataToSave])
@@ -35,7 +33,8 @@ export async function salvarCategoria(payload: any) {
 export async function deletarCategoria(id: string) {
   try {
     const supabase = await createClient()
-    const { error } = await supabase.from('categorias').delete().eq('id', id)
+    const grupoId = await getCurrentGroupId()
+    const { error } = await supabase.from('categorias').delete().eq('id', id).eq('grupo_id', grupoId)
     
     if (error) throw error
 

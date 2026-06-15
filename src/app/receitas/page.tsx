@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentGroupId } from "@/lib/auth/group"
 import { MonthSelector } from "@/components/month-selector"
 import { ReceitasList, NovaReceitaForm } from "./form"
 
@@ -7,18 +8,20 @@ export default async function ReceitasPage(props: { searchParams: Promise<{ mes?
   const mes = searchParams.mes || "2026-06"
 
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
 
   // Buscar membros
-  const { data: membrosData } = await supabase.from('membros').select('id, apelido')
+  const { data: membrosData } = await supabase.from('membros').select('id, apelido, papel').eq('grupo_id', grupoId).order('papel', { ascending: true })
   const membros = membrosData || []
   
-  const nicco = membros.find(m => m.apelido === 'Nicco')
-  const diana = membros.find(m => m.apelido === 'Diana')
+  const membro1 = membros[0]
+  const membro2 = membros[1]
 
   // Buscar receitas do mês
   const { data: receitasData } = await supabase
     .from('receitas')
     .select('*')
+    .eq('grupo_id', grupoId)
     .eq('data_competencia', mes)
   const receitas = receitasData || []
 
@@ -36,34 +39,34 @@ export default async function ReceitasPage(props: { searchParams: Promise<{ mes?
 
       <div className="grid md:grid-cols-2 gap-8">
         
-        {/* Coluna Nicco */}
-        {nicco && (
+        {/* Coluna Membro 1 */}
+        {membro1 && (
           <div className="space-y-4">
             <ReceitasList 
               receitas={receitas} 
-              membro={nicco} 
+              membro={membro1} 
               mes={mes}
             />
             <NovaReceitaForm 
-              membro={nicco} 
+              membro={membro1} 
               mes={mes} 
-              opcoesFontes={['Salário', 'Safira', 'Outros']} 
+              opcoesFontes={['Salário', 'Outros']} 
             />
           </div>
         )}
 
-        {/* Coluna Diana */}
-        {diana && (
+        {/* Coluna Membro 2 */}
+        {membro2 && (
           <div className="space-y-4">
             <ReceitasList 
               receitas={receitas} 
-              membro={diana} 
+              membro={membro2} 
               mes={mes}
             />
             <NovaReceitaForm 
-              membro={diana} 
+              membro={membro2} 
               mes={mes} 
-              opcoesFontes={['Salário', 'Renda Marketing Digital', 'Outros']} 
+              opcoesFontes={['Salário', 'Outros']} 
             />
           </div>
         )}

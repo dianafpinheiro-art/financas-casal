@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getCurrentGroupId } from '@/lib/auth/group'
 
 export async function updateDivisaoLancamento(
   id: string, 
@@ -9,6 +10,7 @@ export async function updateDivisaoLancamento(
   pctDiana?: number
 ) {
   const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
 
   let divisao_pct_diana = 50
   if (novaDivisao === 'so_diana') divisao_pct_diana = 100
@@ -24,6 +26,7 @@ export async function updateDivisaoLancamento(
         classificado: true // Marcamos como revisado/classificado
       })
       .eq('id', id)
+      .eq('grupo_id', grupoId)
 
     if (error) throw error
 
@@ -37,7 +40,8 @@ export async function updateDivisaoLancamento(
 
 export async function getCategorias() {
   const supabase = await createClient()
-  const { data } = await supabase.from('categorias').select('id, nome').order('nome', { ascending: true })
+  const grupoId = await getCurrentGroupId()
+  const { data } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome', { ascending: true })
   return data || []
 }
 
@@ -47,10 +51,12 @@ export async function updateCategoriaLancamento(
 ) {
   try {
     const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
     const { error } = await supabase
       .from('lancamentos')
       .update({ categoria_id: categoriaId })
       .eq('id', lancamentoId)
+      .eq('grupo_id', grupoId)
 
     if (error) throw error
 
@@ -67,10 +73,12 @@ export async function updateEstabelecimentoLancamento(
 ) {
   try {
     const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
     const { error } = await supabase
       .from('lancamentos')
       .update({ merchant: estabelecimento })
       .eq('id', lancamentoId)
+      .eq('grupo_id', grupoId)
 
     if (error) throw error
 
@@ -87,10 +95,12 @@ export async function updateObservacaoLancamento(
 ) {
   try {
     const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
     const { error } = await supabase
       .from('lancamentos')
       .update({ observacao: observacao })
       .eq('id', lancamentoId)
+      .eq('grupo_id', grupoId)
 
     if (error) throw error
 
