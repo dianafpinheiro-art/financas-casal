@@ -2,24 +2,17 @@
 
 import { Bell, Moon, Sun, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import Link from "next/link"
+import { useEffect, useState, useRef } from "react"
 
 export function Header() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(true)
   const [email, setEmail] = useState<string>("")
   const [grupoNome, setGrupoNome] = useState<string>("Carregando...")
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"))
@@ -40,6 +33,18 @@ export function Header() {
     }
     fetchUser()
   }, [])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [menuOpen])
 
   const toggleTheme = () => {
     const root = document.documentElement
@@ -77,37 +82,43 @@ export function Header() {
 
         <div className="h-6 w-px bg-border mx-1" />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="relative h-9 w-9 flex items-center justify-center rounded-full bg-muted border border-border hover:bg-muted/80 transition-colors">
+        {/* Custom dropdown to avoid Base UI Menu crash on item click */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="relative h-9 w-9 flex items-center justify-center rounded-full bg-muted border border-border hover:bg-muted/80 transition-colors"
+          >
             <User className="w-5 h-5 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-56 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg z-50 animate-in fade-in-0 zoom-in-95">
+              <div className="px-2 py-1.5">
                 <p className="text-sm font-medium leading-none">{grupoNome}</p>
-                <p className="text-xs leading-none text-muted-foreground">
+                <p className="text-xs leading-none text-muted-foreground mt-1">
                   {email}
                 </p>
               </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => router.push("/ajustes")}
-            >
-              Perfil & Ajustes
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Link
+              <div className="-mx-1 my-1 h-px bg-border" />
+              <button
+                onClick={() => {
+                  setMenuOpen(false)
+                  router.push("/ajustes")
+                }}
+                className="relative flex w-full cursor-pointer select-none items-center rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                Perfil & Ajustes
+              </button>
+              <div className="-mx-1 my-1 h-px bg-border" />
+              <a
                 href="/api/auth/logout"
-                className="text-destructive w-full"
-                prefetch={false}
+                className="relative flex w-full cursor-pointer select-none items-center rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent text-destructive hover:text-destructive"
               >
                 Sair
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )
