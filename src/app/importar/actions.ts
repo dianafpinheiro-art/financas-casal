@@ -5,6 +5,9 @@ import { parseFaturaComClaude, ParseResult, ParsedTransaction } from '@/lib/pars
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentGroupId } from '@/lib/auth/group'
 
+// Permite que a função rode até 60s (limite do plano Hobby)
+export const maxDuration = 60
+
 export async function processarUploadPdf(formData: FormData): Promise<{ success: boolean, message: string, data?: ParseResult }> {
   try {
     const file = formData.get('file') as File
