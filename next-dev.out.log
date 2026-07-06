@@ -1,0 +1,22 @@
+
+> financas-casal@0.1.0 dev
+> next dev --turbopack -p 3000
+
+   ▲ Next.js 15.1.4 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://54.232.189.113:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Compiled in 1029ms
+ ✓ Ready in 3.9s
+ ○ Compiling /login ...
+ ✓ Compiled /login in 7.6s
+ GET /login 200 in 8287ms
+ GET /login 200 in 451ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 5.7s
+ GET /dashboard 200 in 6514ms
+ GET /dashboard 200 in 408ms
+ ✓ Compiled /_not-found/page in 308ms
+ GET /sw.js 404 in 464ms

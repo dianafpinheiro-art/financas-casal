@@ -1,0 +1,20 @@
+AuthApiError: Invalid Refresh Token: Refresh Token Not Found {
+  __isAuthError: true,
+  status: 400,
+  code: 'refresh_token_not_found'
+}
+AuthApiError: Invalid Refresh Token: Refresh Token Not Found {
+  __isAuthError: true,
+  status: 400,
+  code: 'refresh_token_not_found'
+}
+AuthApiError: Invalid Refresh Token: Refresh Token Not Found {
+  __isAuthError: true,
+  status: 400,
+  code: 'refresh_token_not_found'
+}
+AuthApiError: Invalid Refresh Token: Refresh Token Not Found {
+  __isAuthError: true,
+  status: 400,
+  code: 'refresh_token_not_found'
+}
