@@ -1,48 +1,13 @@
 'use server'
 
-import { extrairTextoPdf } from '@/lib/parser/pdf'
-import { parseFaturaComClaude, ParseResult, ParsedTransaction } from '@/lib/parser/claude'
+// O parse do PDF saiu daqui: Server Action tem teto de 1 MB de body (e o
+// Vercel corta 4,5 MB na borda), o que travava fatura grande. Agora o texto
+// é extraído no BROWSER (lib/pdf-client.ts) e vai pra /api/parse-fatura,
+// que extrai em chunks paralelos com structured outputs.
+
+import { ParsedTransaction } from '@/lib/parser/types'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentGroupId } from '@/lib/auth/group'
-
-export async function processarUploadPdf(formData: FormData): Promise<{ success: boolean, message: string, data?: ParseResult }> {
-  try {
-    const file = formData.get('file') as File
-    const tipo = formData.get('tipo') as 'generico' | 'elo_ourocard'
-
-    if (!file) {
-      return { success: false, message: 'Nenhum arquivo enviado.' }
-    }
-
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    // 1. Converte o PDF para Base64 diretamente (ignorando bibliotecas externas)
-    const base64Pdf = buffer.toString('base64')
-
-    // 2. Envia para o Claude interpretar e extrair de forma nativa (Multimodal PDF)
-    const resultado = await parseFaturaComClaude(base64Pdf, tipo)
-
-    // 3. Verifica o Sanity Check
-    if (!resultado.sanity_ok) {
-      console.warn("SANITY CHECK FALHOU:", resultado)
-      // Podemos escolher bloquear ou apenas avisar. Neste caso, retornamos o aviso.
-    }
-
-    // Nota: Aqui na Fase 4 faríamos o INSERT na tabela "fontes_importacao" e "lancamentos" no Supabase
-    // Por enquanto, apenas retornamos os dados processados para a interface revisar.
-
-    return { 
-      success: true, 
-      message: 'Fatura lida com sucesso!', 
-      data: resultado 
-    }
-
-  } catch (error: any) {
-    console.error('Erro no processamento do PDF:', error)
-    return { success: false, message: error.message || 'Erro desconhecido ao processar fatura.' }
-  }
-}
 
 export async function getCartoes() {
   const supabase = await createClient()

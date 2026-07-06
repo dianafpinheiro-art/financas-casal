@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { processarUploadPdf, salvarLancamentosNoBanco, getCartoes } from './actions'
+import { salvarLancamentosNoBanco, getCartoes } from './actions'
+import { extrairTextoPdf } from '@/lib/pdf-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -32,22 +33,59 @@ export default function ImportarPage() {
     }
   }
 
+  // PDF sem camada de texto (escaneado) só pode subir inteiro se couber no
+  // limite de request body do Vercel (4,5 MB, cortado na borda sem log).
+  const MAX_PDF_UPLOAD = 4 * 1024 * 1024
+
   const handleUpload = async () => {
     if (!file) return
+    if (!mesReferencia) {
+      toast.error('Selecione o mês da fatura antes de enviar.')
+      return
+    }
 
     setIsUploading(true)
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('tipo', tipo)
-
     try {
-      const res = await processarUploadPdf(formData)
-      if (res.success) {
-        toast.success(res.message)
-        setResultado(res.data)
-      } else {
-        toast.error(res.message)
+      // Extrai o texto do PDF aqui no navegador — o arquivo (que pode ter
+      // vários MB) nunca sobe; vão só ~30-50 KB de texto.
+      let paginas: string[] | null = null
+      try {
+        const extraido = await extrairTextoPdf(file)
+        if (extraido.paginas.join('').trim().length >= 200) {
+          paginas = extraido.paginas
+        }
+      } catch {
+        // PDF que o pdf.js não leu — tenta o fallback com o arquivo inteiro.
       }
+
+      let res: Response
+      if (paginas != null) {
+        res = await fetch('/api/parse-fatura', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paginas, tipo, mes_referencia: mesReferencia }),
+        })
+      } else if (file.size <= MAX_PDF_UPLOAD) {
+        // Sem texto (PDF escaneado/imagem): manda o arquivo pro Claude ler.
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('tipo', tipo)
+        formData.append('mes_referencia', mesReferencia)
+        res = await fetch('/api/parse-fatura', { method: 'POST', body: formData })
+      } else {
+        toast.error(
+          'Esse PDF parece escaneado (sem texto selecionável) e é grande demais pra subir inteiro. Exporta a fatura em PDF nativo no app/site do banco e tenta de novo.',
+        )
+        return
+      }
+
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error ?? 'Falha ao analisar a fatura.')
+        return
+      }
+      toast.success('Fatura lida com sucesso!')
+      setResultado(json)
     } catch (err: any) {
       toast.error('Erro ao enviar arquivo: ' + err.message)
     } finally {
@@ -93,7 +131,7 @@ export default function ImportarPage() {
       <Card>
         <CardHeader>
           <CardTitle>Nova Importação</CardTitle>
-          <CardDescription>O nosso motor Claude 3.5 Sonnet fará a leitura mágica.</CardDescription>
+          <CardDescription>O texto é extraído no seu navegador e o Claude lê os lançamentos em paralelo — fatura grande não trava mais.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-4 gap-6">
@@ -157,7 +195,7 @@ export default function ImportarPage() {
           >
             {isUploading ? (
               <span className="flex items-center gap-2 animate-pulse">
-                <UploadCloud className="w-4 h-4" /> Lendo PDF... (Pode levar uns 15s)
+                <UploadCloud className="w-4 h-4" /> Lendo fatura... (fatura grande pode levar 1–2 min)
               </span>
             ) : (
               <span className="flex items-center gap-2">
