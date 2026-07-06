@@ -51,10 +51,16 @@ export async function getCartoes() {
   return data || []
 }
 
-export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], cartaoId: string) {
+export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], cartaoId: string, mesReferencia: string) {
   try {
     const supabase = await createClient()
     const grupoId = await getCurrentGroupId()
+
+    if (!/^\d{4}-\d{2}$/.test(mesReferencia)) {
+      return { success: false, message: 'Mês da fatura inválido.' }
+    }
+
+    const dataCompetencia = `${mesReferencia}-01`
 
     // Descobrir o dono do cartão
     const { data: cartao } = await supabase.from('cartoes').select('membro_id').eq('id', cartaoId).eq('grupo_id', grupoId).single()
@@ -94,7 +100,7 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
         cartao_id: cartaoId,
         pago_por_id: pagoPorId,
         data_lancamento: t.data,
-        data_competencia: t.data,
+        data_competencia: dataCompetencia,
         descricao: t.descricao,
         valor: t.valor_cents,
         parcela_atual: t.parcela_atual || null,
@@ -114,7 +120,7 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
       return { success: false, message: "Erro ao salvar no banco." }
     }
 
-    return { success: true, message: `${transacoes.length} lançamentos salvos com sucesso!` }
+    return { success: true, message: `${transacoes.length} lançamentos salvos em ${mesReferencia}!` }
   } catch (err: any) {
     console.error("Erro no salvarLancamentosNoBanco:", err)
     return { success: false, message: err.message }

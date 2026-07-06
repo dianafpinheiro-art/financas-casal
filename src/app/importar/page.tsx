@@ -5,7 +5,7 @@ import { processarUploadPdf, salvarLancamentosNoBanco, getCartoes } from './acti
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { UploadCloud, CheckCircle2, AlertCircle } from 'lucide-react'
+import { UploadCloud, CheckCircle2, AlertCircle, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatarCentavosParaReal } from '@/lib/utils/centavos'
 
@@ -13,6 +13,7 @@ export default function ImportarPage() {
   const [file, setFile] = useState<File | null>(null)
   const [tipo, setTipo] = useState<'generico' | 'elo_ourocard'>('generico')
   const [cartaoId, setCartaoId] = useState<string>('')
+  const [mesReferencia, setMesReferencia] = useState<string>(() => new Date().toISOString().slice(0, 7))
   const [cartoes, setCartoes] = useState<any[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
@@ -60,9 +61,13 @@ export default function ImportarPage() {
       toast.error("Selecione um cartão antes de salvar.")
       return
     }
+    if (!mesReferencia) {
+      toast.error("Selecione o mês da fatura antes de salvar.")
+      return
+    }
 
     try {
-      const res = await salvarLancamentosNoBanco(resultado.transacoes, cartaoId)
+      const res = await salvarLancamentosNoBanco(resultado.transacoes, cartaoId, mesReferencia)
       if (res.success) {
         toast.success(res.message)
         // Redirecionar para dashboard ou limpar a tela?
@@ -91,7 +96,7 @@ export default function ImportarPage() {
           <CardDescription>O nosso motor Claude 3.5 Sonnet fará a leitura mágica.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Cartão de Crédito</label>
               <Select value={cartaoId} onValueChange={(val: any) => setCartaoId(val)}>
@@ -104,6 +109,19 @@ export default function ImportarPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mês da Fatura</label>
+              <div className="relative">
+                <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="month"
+                  value={mesReferencia}
+                  onChange={(e) => setMesReferencia(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
