@@ -19,6 +19,95 @@ export type ParseResult = {
   sanity_ok: boolean
 }
 
+function getTextFromClaudeContent(content: unknown): string {
+  if (!Array.isArray(content)) return ''
+
+  return content
+    .map((block) => {
+      if (
+        block &&
+        typeof block === 'object' &&
+        'type' in block &&
+        block.type === 'text' &&
+        'text' in block &&
+        typeof block.text === 'string'
+      ) {
+        return block.text
+      }
+
+      return ''
+    })
+    .join('\n')
+    .trim()
+}
+
+function extractJsonObject(raw: string): string {
+  const withoutFences = raw
+    .replace(/```(?:json)?/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const firstBrace = withoutFences.indexOf('{')
+  if (firstBrace === -1) return withoutFences
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = firstBrace; index < withoutFences.length; index++) {
+    const char = withoutFences[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) continue
+
+    if (char === '{') depth++
+    if (char === '}') depth--
+
+    if (depth === 0) {
+      return withoutFences.slice(firstBrace, index + 1)
+    }
+  }
+
+  return withoutFences.slice(firstBrace)
+}
+
+function validateParseResult(data: ParseResult): ParseResult {
+  if (!Array.isArray(data.transacoes)) {
+    throw new Error('Campo transacoes ausente ou invalido.')
+  }
+
+  data.transacoes = data.transacoes.map((transaction) => ({
+    ...transaction,
+    valor_cents: Number(transaction.valor_cents) || 0,
+    moeda: transaction.moeda || 'BRL',
+    parcela_atual: transaction.parcela_atual ?? null,
+    parcela_total: transaction.parcela_total ?? null,
+  }))
+
+  if (typeof data.total_fatura_cents !== 'number') {
+    data.total_fatura_cents = data.transacoes.reduce(
+      (acc, curr) => acc + (Number(curr.valor_cents) || 0),
+      0
+    )
+  }
+
+  return data
+}
+
 export async function parseFaturaComClaude(
   base64Pdf: string,
   tipo: 'generico' | 'elo_ourocard'
@@ -30,6 +119,8 @@ Converta todos os valores monetários para INTEIROS EM CENTAVOS (ex: R$ 12,50 vi
 Converta todas as datas para YYYY-MM-DD (assuma o ano atual caso não tenha).
 Se a compra for parcelada, extraia o número da parcela atual e o total de parcelas. Remova a informação de parcelas (ex: "02/12") do nome da descrição.
 MUITO IMPORTANTE: Se a fatura exibir o valor total de uma compra parcelada ao lado do valor da parcela mensal, EXTRAIA APENAS O VALOR DA PARCELA MENSAL. Ex: se o PDF mostra "630,00" e "63,00" para uma compra 02/10, o seu valor_cents DEVE SER 6300, e NUNCA 63000.
+Faturas de companhias aéreas, Smiles, milhas e programas de pontos podem misturar compra, taxa, IOF, parcelamento e textos promocionais. Extraia apenas linhas monetárias de cobrança da fatura. Ignore pontos, milhas, saldos de programa, benefícios e textos de campanha.
+Se não conseguir identificar cobranças, retorne exatamente {"total_fatura_cents":0,"transacoes":[]} sem explicar nada.
 
 Responda APENAS com um objeto JSON neste formato exato (sem Markdown):
 {
@@ -50,6 +141,8 @@ Converta todos os valores para INTEIROS EM CENTAVOS (ex: R$ 12,50 vira 1250).
 Converta todas as datas para YYYY-MM-DD (assuma o ano atual caso não tenha).
 Se a compra for parcelada, extraia o número da parcela atual e o total de parcelas. Remova a informação de parcelas (ex: "02/12") do nome da descrição.
 MUITO IMPORTANTE: Se a fatura exibir o valor total de uma compra parcelada ao lado do valor da parcela mensal, EXTRAIA APENAS O VALOR DA PARCELA MENSAL. Ex: se o PDF mostra "630,00" e "63,00" para uma compra 02/10, o seu valor_cents DEVE SER 6300, e NUNCA 63000.
+Faturas de companhias aéreas, Smiles, milhas e programas de pontos podem misturar compra, taxa, IOF, parcelamento e textos promocionais. Extraia apenas linhas monetárias de cobrança da fatura. Ignore pontos, milhas, saldos de programa, benefícios e textos de campanha.
+Se não conseguir identificar cobranças, retorne exatamente {"total_fatura_cents":0,"transacoes":[]} sem explicar nada.
 
 Responda APENAS com um objeto JSON neste formato exato (sem Markdown):
 {
@@ -63,46 +156,48 @@ Responda APENAS com um objeto JSON neste formato exato (sem Markdown):
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0,
-    system: "Você é um extrator de dados estrito. Responda única e exclusivamente com JSON válido.",
+    system: 'Você é um extrator de dados estrito. Responda única e exclusivamente com JSON válido. Não inclua comentários, Markdown, explicações ou texto antes/depois do JSON.',
     messages: [
       {
         role: 'user',
         content: [
           {
-            type: "document",
+            type: 'document',
             source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: base64Pdf
-            }
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64Pdf,
+            },
           },
           {
-            type: "text",
-            text: tipo === 'elo_ourocard' ? promptElo : promptGenerico
-          }
-        ]
-      }
-    ]
+            type: 'text',
+            text: tipo === 'elo_ourocard' ? promptElo : promptGenerico,
+          },
+        ],
+      },
+    ],
   })
 
-  // @ts-ignore
-  const jsonStr = message.content[0].text.trim()
-  // Limpeza de blocos Markdown (o Claude adora colocar ```json no começo)
-  const cleanStr = jsonStr.replace(/```json/gi, '').replace(/```/g, '').trim()
-  
+  const jsonStr = getTextFromClaudeContent(message.content)
+  const cleanStr = extractJsonObject(jsonStr)
+
   try {
-    const data = JSON.parse(cleanStr) as ParseResult
-    
+    const data = validateParseResult(JSON.parse(cleanStr) as ParseResult)
+
     // Sanity Check: Soma das transações bate com o total declarado? (margem de erro de R$ 5,00)
     const somaTransacoes = data.transacoes.reduce((acc, curr) => acc + curr.valor_cents, 0)
     const diferenca = Math.abs(data.total_fatura_cents - somaTransacoes)
     data.sanity_ok = diferenca <= 500 // 500 centavos = R$ 5,00 de margem pra IOF/Taxas não capturadas
-    
+
     return data
   } catch (error) {
-    console.error("Falha ao fazer parse do JSON do Claude", jsonStr)
-    throw new Error("A IA não retornou um JSON válido.")
+    console.error('Falha ao fazer parse do JSON do Claude', {
+      error,
+      raw: jsonStr.slice(0, 2000),
+      extracted: cleanStr.slice(0, 2000),
+    })
+    throw new Error('A IA não retornou um JSON válido.')
   }
 }
