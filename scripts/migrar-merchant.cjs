@@ -1,0 +1,117 @@
+const ws = require("ws");
+
+/**
+ * Migração de dados pro paradigma merchant. Roda DEPOIS da migration 008
+ * (colunas merchant criadas) e ANTES da 009 (índice único).
+ *
+ *   node scripts/migrar-merchant.cjs
+ *
+ * Precisa de NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY no .env.local
+ * (o service_role ignora RLS — fica fora do git pelo .gitignore).
+ *
+ * O que faz:
+ *   1. Lê todas as regras_aprendidas, calcula merchant via extrairMerchant.
+ *   2. Dedup por (grupo_id, merchant): mantém a de MAIOR vezes_confirmada e
+ *      SOMA os contadores; apaga as demais. (nenhum merchant é perdido)
+ *   3. Backfill: popula merchant em todos os lançamentos.
+ *   4. Relata contagens antes/depois.
+ *
+ * Idempotente: rodar 2x não duplica nem perde nada.
+ */
+const fs = require('fs')
+const path = require('path')
+const { createClient } = require('@supabase/supabase-js')
+const { extrairMerchant } = require('../src/domain/merchant.js')
+
+// --- carrega .env.local ---
+const env = {}
+const envPath = path.join(__dirname, '..', '.env.local')
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
+    if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
+  }
+}
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY
+if (!URL || !KEY) {
+  console.error(
+    'Faltam NEXT_PUBLIC_SUPABASE_URL e/ou SUPABASE_SERVICE_ROLE_KEY no .env.local.\n' +
+      'Pega o service_role em Supabase → Settings → API → service_role key.',
+  )
+  process.exit(1)
+}
+
+const supabase = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false }, realtime: { transport: ws } })
+
+async function main() {
+  // ---------- 1. regras: calcula merchant ----------
+  const { data: regras, error: e1 } = await supabase
+    .from('regras_aprendidas')
+    .select('id, grupo_id, padrao_descricao, vezes_confirmada')
+  if (e1) throw e1
+  console.log(`Regras antes: ${regras.length}`)
+
+  // agrupa por grupo+merchant
+  const grupos = new Map() // key -> { merchant, grupo_id, rows: [] }
+  for (const r of regras) {
+    const merchant = extrairMerchant(r.padrao_descricao || '')
+    const key = `${r.grupo_id}::${merchant}`
+    if (!grupos.has(key)) grupos.set(key, { merchant, grupo_id: r.grupo_id, rows: [] })
+    grupos.get(key).rows.push(r)
+  }
+
+  let atualizadas = 0
+  let removidas = 0
+  for (const { merchant, rows } of grupos.values()) {
+    rows.sort((a, b) => (b.vezes_confirmada ?? 0) - (a.vezes_confirmada ?? 0))
+    const sobrevivente = rows[0]
+    const somaVezes = rows.reduce((s, r) => s + (r.vezes_confirmada ?? 0), 0)
+
+    const { error: eu } = await supabase
+      .from('regras_aprendidas')
+      .update({ merchant, vezes_confirmada: somaVezes })
+      .eq('id', sobrevivente.id)
+    if (eu) throw eu
+    atualizadas++
+
+    if (rows.length > 1) {
+      const perdedores = rows.slice(1).map((r) => r.id)
+      const { error: ed } = await supabase.from('regras_aprendidas').delete().in('id', perdedores)
+      if (ed) throw ed
+      removidas += perdedores.length
+    }
+  }
+
+  console.log(`Merchants distintos: ${grupos.size}`)
+  console.log(`Regras atualizadas: ${atualizadas} · duplicadas removidas: ${removidas}`)
+
+  // ---------- 2. backfill lançamentos ----------
+  const { data: lancs, error: e2 } = await supabase
+    .from('lancamentos')
+    .select('id, descricao')
+  if (e2) throw e2
+  let backfill = 0
+  for (const l of lancs) {
+    const merchant = extrairMerchant(l.descricao || '')
+    const { error: eu } = await supabase
+      .from('lancamentos')
+      .update({ merchant })
+      .eq('id', l.id)
+    if (eu) throw eu
+    backfill++
+  }
+  console.log(`Lançamentos com merchant preenchido: ${backfill}/${lancs.length}`)
+
+  // ---------- 3. conferência ----------
+  const { count: depois } = await supabase
+    .from('regras_aprendidas')
+    .select('*', { count: 'exact', head: true })
+  console.log(`Regras depois: ${depois} (= merchants distintos, nenhum perdido)`)
+  console.log('✅ Migração merchant concluída. Agora rode a migration 009 (índice único).')
+}
+
+main().catch((err) => {
+  console.error('❌ Falha na migração:', err.message || err)
+  process.exit(1)
+})

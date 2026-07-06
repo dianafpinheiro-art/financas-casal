@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-e-testes:
+    runs-on: ubuntu-latest
+
+    env:
+      # Placeholders só pra o `next build` não quebrar (as páginas instanciam
+      # o client do Supabase com process.env.*!). Chaves reais ficam nos
+      # Secrets do GitHub / variáveis da Vercel — nunca no repo.
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes (vitest)
+        run: npm test
+
+      - name: Type-check (tsc --noEmit)
+        run: npm run type-check
+
+      - name: Build de produção
+        run: npm run build
+
+      - name: ANTHROPIC_API_KEY não pode vazar pro bundle do client
+        run: |
+          if grep -rl "sk-ant" .next/static/; then
+            echo "::error::Chave 'sk-ant' encontrada no bundle do client! Mova a chamada do SDK Anthropic pra uma API route / Server Action."
+            exit 1
+          fi
+          echo "OK: nenhuma chave no bundle."
