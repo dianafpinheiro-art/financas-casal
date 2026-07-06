@@ -156,7 +156,7 @@ Responda APENAS com um objeto JSON neste formato exato (sem Markdown):
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
+    max_tokens: 16000,
     temperature: 0,
     system: 'Você é um extrator de dados estrito. Responda única e exclusivamente com JSON válido. Não inclua comentários, Markdown, explicações ou texto antes/depois do JSON.',
     messages: [
