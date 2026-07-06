@@ -18,3 +18,16 @@ AuthApiError: Invalid Refresh Token: Refresh Token Not Found {
   status: 400,
   code: 'refresh_token_not_found'
 }
+ ⚠ Found a change in next.config.js. Restarting the server to apply the changes...
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. Please report the content of C:\Users\diana\AppData\Local\Temp\next-panic-5e50122b97477201bb0d18af128b4012.log, along with a description of what you were doing when the error occurred, to https://github.com/vercel/next.js/issues/new
+[Error [TurbopackInternalError]: Next.js package not found
+
+Debug info:
+- Execution of get_entrypoints_with_issues failed
+- Execution of Project::entrypoints failed
+- Execution of AppProject::routes failed
+- Execution of directory_tree_to_entrypoints_internal failed
+- Execution of directory_tree_to_loader_tree failed
+- Execution of *FileSystemPath::join failed
+- Execution of get_next_package failed
+- Next.js package not found]
