@@ -7,29 +7,35 @@ export default async function LancamentosPage() {
   const supabase = await createClient()
   const grupoId = await getCurrentGroupId()
   
-  // Buscar os dados reais do banco
-  const { data: lancamentos, error } = await supabase
-    .from('lancamentos')
-    .select(`
-      id,
-      cartao_id,
-      data_lancamento,
-      descricao,
-      merchant,
-      observacao,
-      valor,
-      divisao_tipo,
-      divisao_pct_diana,
-      classificado,
-      parcela_atual,
-      parcela_total,
-      categoria_id,
-      categorias ( nome ),
-      cartoes ( apelido ),
-      criado_em
-    `)
-    .eq('grupo_id', grupoId)
-    .order('criado_em', { ascending: true })
+  // Buscar lançamentos e categorias em paralelo
+  const [lancRes, catRes] = await Promise.all([
+    supabase
+      .from('lancamentos')
+      .select(`
+        id,
+        cartao_id,
+        data_lancamento,
+        descricao,
+        merchant,
+        observacao,
+        valor,
+        divisao_tipo,
+        divisao_pct_diana,
+        classificado,
+        parcela_atual,
+        parcela_total,
+        categoria_id,
+        categorias ( nome ),
+        cartoes ( apelido ),
+        criado_em
+      `)
+      .eq('grupo_id', grupoId)
+      .order('criado_em', { ascending: true }),
+    supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome'),
+  ])
+
+  const { data: lancamentos, error } = lancRes
+  const categoriasLista = catRes.data
 
   // Formatar os dados para o formato esperado pela tabela
   const formattedData: Lancamento[] = (lancamentos || []).map((l: any) => ({
@@ -48,8 +54,6 @@ export default async function LancamentosPage() {
     parcela_atual: l.parcela_atual,
     parcela_total: l.parcela_total,
   }))
-
-  const { data: categoriasLista } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome')
 
   return (
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">

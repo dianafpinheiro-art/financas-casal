@@ -13,7 +13,7 @@ import { ResumoParcelados } from "@/components/resumos/ResumoParcelados"
 
 export default async function DashboardPage(props: { searchParams: Promise<{ mes?: string }> }) {
   const searchParams = await props.searchParams
-  const mes = searchParams.mes || "2026-06"
+  const mes = searchParams.mes || new Date().toISOString().slice(0, 7)
   
   let fechamento = null
   let errorMessage = null
@@ -22,12 +22,30 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
 
   try {
     const grupoId = await getCurrentGroupId()
-    fechamento = await calcularFechamentoDoMes(mes)
     const supabase = await createClient()
-    const { data } = await supabase.from('lancamentos').select('*, cartoes(apelido), categorias(nome)').eq('grupo_id', grupoId)
-    todosLancamentos = data || []
-    const { data: catData } = await supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome', { ascending: true })
-    categorias = catData || []
+
+    // Janela de 12 meses pro gráfico de evolução (antes baixava a base inteira)
+    const [anoJanela, mesJanela] = mes.split('-').map(Number)
+    const inicioJanela = `${anoJanela - 1}-${String(mesJanela).padStart(2, '0')}-01`
+
+    // Queries em paralelo em vez de sequenciais
+    const [fechamentoRes, lancRes, catRes] = await Promise.all([
+      calcularFechamentoDoMes(mes),
+      supabase
+        .from('lancamentos')
+        .select('id, descricao, valor, data_competencia, data_lancamento, categoria_id, parcela_atual, parcela_total, divisao_tipo, divisao_pct_diana, cartoes(apelido), categorias(nome)')
+        .eq('grupo_id', grupoId)
+        .gte('data_competencia', inicioJanela),
+      supabase
+        .from('categorias')
+        .select('id, nome')
+        .eq('grupo_id', grupoId)
+        .order('nome', { ascending: true }),
+    ])
+
+    fechamento = fechamentoRes
+    todosLancamentos = lancRes.data || []
+    categorias = catRes.data || []
   } catch (e: any) {
     errorMessage = e.message
   }

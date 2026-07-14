@@ -1,12 +1,15 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
-export async function getCurrentGroupId(): Promise<string> {
+// cache() deduplica a busca dentro da mesma request: várias funções chamam
+// getCurrentGroupId no mesmo render e antes cada uma disparava 2 queries.
+export const getCurrentGroupId = cache(async (): Promise<string> => {
   const supabase = await createClient()
 
   // 1. Pega a sessão atual
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
+
   if (authError || !user) {
     redirect('/login')
   }
@@ -24,4 +27,4 @@ export async function getCurrentGroupId(): Promise<string> {
   }
 
   return membro.grupo_id
-}
+})

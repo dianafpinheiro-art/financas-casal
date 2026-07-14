@@ -31,13 +31,36 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
   const supabase = await createClient()
   const grupoId = await getCurrentGroupId()
 
-  // Buscar os membros ordenados por papel para consistência (admin primeiro)
-  const { data: membros } = await supabase
-    .from('membros')
-    .select('id, apelido')
-    .eq('grupo_id', grupoId)
-    .order('papel', { ascending: true })
-  
+  const inicioMes = `${mesCompetencia}-01`
+
+  const [ano, mes] = mesCompetencia.split('-').map(Number)
+  const proximoMes = mes === 12 ? 1 : mes + 1
+  const proximoAno = mes === 12 ? ano + 1 : ano
+  const inicioProximoMes = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`
+
+  // Dispara as 3 queries em paralelo em vez de esperar uma por uma
+  const [membrosRes, lancamentosRes, reembolsosRes] = await Promise.all([
+    supabase
+      .from('membros')
+      .select('id, apelido')
+      .eq('grupo_id', grupoId)
+      .order('papel', { ascending: true }),
+    supabase
+      .from('lancamentos')
+      .select('valor, pago_por_id, divisao_tipo, divisao_pct_diana, cartoes(membro_id)')
+      .eq('grupo_id', grupoId)
+      .gte('data_competencia', inicioMes)
+      .lt('data_competencia', inicioProximoMes),
+    supabase
+      .from('reembolsos')
+      .select('valor, credito_para_id')
+      .eq('grupo_id', grupoId)
+      .gte('data_competencia', inicioMes)
+      .lt('data_competencia', inicioProximoMes),
+  ])
+
+  const membros = membrosRes.data
+
   if (!membros || membros.length < 2) {
     throw new Error("São necessários no mínimo 2 membros no grupo para o cálculo.")
   }
@@ -45,19 +68,7 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
   const membro1 = membros[0]
   const membro2 = membros[1]
 
-  const inicioMes = `${mesCompetencia}-01`
-  
-  const [ano, mes] = mesCompetencia.split('-').map(Number)
-  const proximoMes = mes === 12 ? 1 : mes + 1
-  const proximoAno = mes === 12 ? ano + 1 : ano
-  const inicioProximoMes = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`
-  
-  const { data: lancamentos, error } = await supabase
-    .from('lancamentos')
-    .select('*, cartoes(membro_id)')
-    .eq('grupo_id', grupoId)
-    .gte('data_competencia', inicioMes)
-    .lt('data_competencia', inicioProximoMes)
+  const { data: lancamentos, error } = lancamentosRes as { data: any[] | null, error: any }
 
   if (error || !lancamentos) {
     throw new Error("Erro ao buscar lançamentos: " + error?.message)
@@ -113,12 +124,7 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
     }
   }
 
-  const { data: reembolsos, error: erroReembolsos } = await supabase
-    .from('reembolsos')
-    .select('*')
-    .eq('grupo_id', grupoId)
-    .gte('data_competencia', inicioMes)
-    .lt('data_competencia', inicioProximoMes)
+  const reembolsos = reembolsosRes.data
 
   let totalReembolsosMembro2 = 0
   let totalReembolsosMembro1 = 0
