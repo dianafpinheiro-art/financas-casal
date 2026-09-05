@@ -35,6 +35,7 @@ import {
 } from '@/domain/parsers/chunks'
 import { dataCompraDaFatura } from '@/domain/lancamento'
 import { type ParseResult } from '@/lib/parser/types'
+import { mesValido } from '@/domain/importacao'
 
 export const runtime = 'nodejs'
 // Fatura grande: os chunks rodam em paralelo, mas o mais lento leva ~2 min
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (body.tipo !== 'generico' && body.tipo !== 'elo_ourocard') {
       return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
     }
-    if (typeof body.mes_referencia !== 'string' || !/^\d{4}-\d{2}$/.test(body.mes_referencia)) {
+    if (typeof body.mes_referencia !== 'string' || !mesValido(body.mes_referencia)) {
       return NextResponse.json({ error: 'mes_referencia inválido (YYYY-MM)' }, { status: 400 })
     }
     paginas = body.paginas
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     if (tipoForm !== 'generico' && tipoForm !== 'elo_ourocard') {
       return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
     }
-    if (typeof mesForm !== 'string' || !/^\d{4}-\d{2}$/.test(mesForm)) {
+    if (typeof mesForm !== 'string' || !mesValido(mesForm)) {
       return NextResponse.json({ error: 'mes_referencia inválido (YYYY-MM)' }, { status: 400 })
     }
     // O Vercel corta request body > 4,5 MB na borda — em produção nem

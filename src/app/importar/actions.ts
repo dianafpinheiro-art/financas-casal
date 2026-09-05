@@ -8,6 +8,8 @@
 import { ParsedTransaction } from '@/lib/parser/types'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentGroupId } from '@/lib/auth/group'
+import { mesValido, conferirImportacao } from '@/domain/importacao'
+import { revalidatePath } from 'next/cache'
 
 export async function getCartoes() {
   const supabase = await createClient()
@@ -16,19 +18,24 @@ export async function getCartoes() {
   return data || []
 }
 
-export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], cartaoId: string, mesReferencia: string) {
+export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], cartaoId: string, mesReferencia: string, conferencia: { total: number; semTotal: boolean; revisado: boolean; arquivoNome: string }) {
   try {
     const supabase = await createClient()
     const grupoId = await getCurrentGroupId()
 
-    if (!/^\d{4}-\d{2}$/.test(mesReferencia)) {
+    if (!mesValido(mesReferencia)) {
       return { success: false, message: 'Mês da fatura inválido.' }
     }
 
     const dataCompetencia = `${mesReferencia}-01`
+    const check = conferirImportacao(transacoes, conferencia.total, conferencia.semTotal)
+    if (check.precisaRevisao && !conferencia.revisado) {
+      return { success: false, message: 'Confira a divergência dos valores antes de salvar.' }
+    }
 
     // Descobrir o dono do cartão
     const { data: cartao } = await supabase.from('cartoes').select('membro_id').eq('id', cartaoId).eq('grupo_id', grupoId).single()
+    if (!cartao) return { success: false, message: 'Cartão inválido para este grupo.' }
     
     // Se o cartão não tiver dono atrelado, precisamos pegar o admin (membro 1) do grupo como fallback
     let pagoPorId = cartao?.membro_id
@@ -74,6 +81,7 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
         divisao_pct_diana: divisaoPct,
         categoria_id: categoriaId,
         classificado: classificado,
+        observacao: `Fatura: ${conferencia.arquivoNome}; mês: ${mesReferencia}${check.precisaRevisao ? '; divergência de valores aceita para revisão' : ''}`,
         criado_em: new Date(baseTime + index * 1000).toISOString()
       }
     })
@@ -85,6 +93,8 @@ export async function salvarLancamentosNoBanco(transacoes: ParsedTransaction[], 
       return { success: false, message: "Erro ao salvar no banco." }
     }
 
+    revalidatePath('/')
+    revalidatePath('/lancamentos')
     return { success: true, message: `${transacoes.length} lançamentos salvos em ${mesReferencia}!` }
   } catch (err: any) {
     console.error("Erro no salvarLancamentosNoBanco:", err)

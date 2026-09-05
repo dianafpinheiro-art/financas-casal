@@ -10,6 +10,7 @@ import { MonthSelector } from "@/components/month-selector"
 import { GraficoCategorias } from "@/components/graficos/GraficoCategorias"
 import { GraficoEvolucao } from "@/components/graficos/GraficoEvolucao"
 import { ResumoParcelados } from "@/components/resumos/ResumoParcelados"
+import { buscarTodasPaginas } from '@/lib/supabase/paginar'
 
 export default async function DashboardPage(props: { searchParams: Promise<{ mes?: string }> }) {
   const searchParams = await props.searchParams
@@ -31,11 +32,12 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
     // Queries em paralelo em vez de sequenciais
     const [fechamentoRes, lancRes, catRes] = await Promise.all([
       calcularFechamentoDoMes(mes),
-      supabase
+      buscarTodasPaginas((inicio, fim) => supabase
         .from('lancamentos')
-        .select('id, descricao, valor, data_competencia, data_lancamento, categoria_id, parcela_atual, parcela_total, divisao_tipo, divisao_pct_diana, cartoes(apelido), categorias(nome)')
+        .select('id, descricao, observacao, valor, data_competencia, data_lancamento, categoria_id, parcela_atual, parcela_total, divisao_tipo, divisao_pct_diana, cartoes(apelido), categorias(nome)')
         .eq('grupo_id', grupoId)
-        .gte('data_competencia', inicioJanela),
+        .gte('data_competencia', inicioJanela)
+        .order('id').range(inicio, fim)),
       supabase
         .from('categorias')
         .select('id, nome')
@@ -75,6 +77,11 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
         </div>
       </div>
 
+      {todosLancamentos.some(l => l.data_competencia?.startsWith(mes) && (l.observacao?.includes('REVISAO PENDENTE') || l.observacao?.includes('divergência de valores aceita'))) && (
+        <div role="alert" className="rounded-lg border border-amber-500 bg-amber-500/10 p-4">
+          Há faturas com valores pendentes de revisão neste mês. Os totais abaixo somam os lançamentos extraídos e não são um fechamento conferido. Consulte as observações em Lançamentos e confira com os PDFs.
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

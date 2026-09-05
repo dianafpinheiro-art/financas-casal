@@ -2,6 +2,7 @@ import { columns, Lancamento } from "./columns"
 import { DataTable } from "./data-table"
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentGroupId } from "@/lib/auth/group"
+import { buscarTodasPaginas } from '@/lib/supabase/paginar'
 
 export default async function LancamentosPage() {
   const supabase = await createClient()
@@ -9,7 +10,7 @@ export default async function LancamentosPage() {
   
   // Buscar lançamentos e categorias em paralelo
   const [lancRes, catRes] = await Promise.all([
-    supabase
+    buscarTodasPaginas((inicio, fim) => supabase
       .from('lancamentos')
       .select(`
         id,
@@ -30,11 +31,11 @@ export default async function LancamentosPage() {
         criado_em
       `)
       .eq('grupo_id', grupoId)
-      .order('criado_em', { ascending: true }),
+      .order('criado_em', { ascending: true }).order('id').range(inicio, fim)),
     supabase.from('categorias').select('id, nome').eq('grupo_id', grupoId).order('nome'),
   ])
 
-  const { data: lancamentos, error } = lancRes
+  const { data: lancamentos } = lancRes
   const categoriasLista = catRes.data
 
   // Formatar os dados para o formato esperado pela tabela
@@ -65,13 +66,7 @@ export default async function LancamentosPage() {
       </div>
       
       <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
-        {error ? (
-          <div className="text-destructive p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
-            Erro ao carregar dados: {error.message}
-          </div>
-        ) : (
-          <DataTable columns={columns} data={formattedData} categorias={categoriasLista || []} />
-        )}
+        <DataTable columns={columns} data={formattedData} categorias={categoriasLista || []} />
       </div>
     </div>
   )

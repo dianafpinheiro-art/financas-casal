@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentGroupId } from '@/lib/auth/group'
+import { buscarTodasPaginas } from '@/lib/supabase/paginar'
 
 export type FechamentoMes = {
   membro1: {
@@ -45,12 +46,13 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
       .select('id, apelido')
       .eq('grupo_id', grupoId)
       .order('papel', { ascending: true }),
-    supabase
+    buscarTodasPaginas((inicio, fim) => supabase
       .from('lancamentos')
       .select('valor, pago_por_id, divisao_tipo, divisao_pct_diana, cartoes(membro_id)')
       .eq('grupo_id', grupoId)
       .gte('data_competencia', inicioMes)
-      .lt('data_competencia', inicioProximoMes),
+      .lt('data_competencia', inicioProximoMes)
+      .order('id').range(inicio, fim)),
     supabase
       .from('reembolsos')
       .select('valor, credito_para_id')

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { mesValido, conferirImportacao } from '@/domain/importacao'
 import { salvarLancamentosNoBanco, getCartoes } from './actions'
 import { extrairTextoPdf } from '@/lib/pdf-client'
 import { Button } from '@/components/ui/button'
@@ -14,7 +15,11 @@ export default function ImportarPage() {
   const [file, setFile] = useState<File | null>(null)
   const [tipo, setTipo] = useState<'generico' | 'elo_ourocard'>('generico')
   const [cartaoId, setCartaoId] = useState<string>('')
-  const [mesReferencia, setMesReferencia] = useState<string>(() => new Date().toISOString().slice(0, 7))
+  const [mesReferencia, setMesReferencia] = useState('')
+  const [anoReferencia, setAnoReferencia] = useState(String(new Date().getFullYear()))
+  const [revisado, setRevisado] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const saving = useRef(false)
   const [cartoes, setCartoes] = useState<any[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
@@ -39,7 +44,7 @@ export default function ImportarPage() {
 
   const handleUpload = async () => {
     if (!file) return
-    if (!mesReferencia) {
+    if (!mesValido(mesReferencia) || !cartaoId) {
       toast.error('Selecione o mês da fatura antes de enviar.')
       return
     }
@@ -84,8 +89,10 @@ export default function ImportarPage() {
         toast.error(json.error ?? 'Falha ao analisar a fatura.')
         return
       }
+      conferirImportacao(json.transacoes, json.total_fatura_cents, json.sem_total)
       toast.success('Fatura lida com sucesso!')
-      setResultado(json)
+      setResultado({ ...json, mesReferencia, cartaoId, arquivoNome: file.name })
+      setRevisado(false)
     } catch (err: any) {
       toast.error('Erro ao enviar arquivo: ' + err.message)
     } finally {
@@ -94,7 +101,7 @@ export default function ImportarPage() {
   }
 
   const handleSalvar = async () => {
-    if (!resultado?.transacoes) return
+    if (!resultado?.transacoes || saving.current) return
     if (!cartaoId) {
       toast.error("Selecione um cartão antes de salvar.")
       return
@@ -105,7 +112,12 @@ export default function ImportarPage() {
     }
 
     try {
-      const res = await salvarLancamentosNoBanco(resultado.transacoes, cartaoId, mesReferencia)
+      saving.current = true
+      setIsSaving(true)
+      const res = await salvarLancamentosNoBanco(resultado.transacoes, resultado.cartaoId, resultado.mesReferencia, {
+        total: resultado.total_fatura_cents, semTotal: !!resultado.sem_total,
+        revisado, arquivoNome: resultado.arquivoNome,
+      })
       if (res.success) {
         toast.success(res.message)
         // Redirecionar para dashboard ou limpar a tela?
@@ -116,6 +128,9 @@ export default function ImportarPage() {
       }
     } catch (err: any) {
       toast.error('Erro ao salvar no banco: ' + err.message)
+    } finally {
+      saving.current = false
+      setIsSaving(false)
     }
   }
 
@@ -137,9 +152,9 @@ export default function ImportarPage() {
           <div className="grid md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Cartão de Crédito</label>
-              <Select value={cartaoId} onValueChange={(val: any) => setCartaoId(val)}>
+              <Select disabled={isUploading || isSaving} value={cartaoId} onValueChange={(val: any) => { setCartaoId(val); setResultado(null) }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o Cartão" />
+                  <SelectValue placeholder="Selecione o Cartão">{cartoes.find(c => c.id === cartaoId)?.apelido ?? 'Selecione o Cartão'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {cartoes.map(c => (
@@ -150,23 +165,30 @@ export default function ImportarPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Mês da Fatura</label>
+              <label htmlFor="mes-fatura" className="text-sm font-medium">Mês da Fatura (vencimento)</label>
               <div className="relative">
                 <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="month"
-                  value={mesReferencia}
-                  onChange={(e) => setMesReferencia(e.target.value)}
+                <select
+                  id="mes-fatura"
+                  disabled={isUploading || isSaving}
+                  value={mesReferencia.slice(5)}
+                  onChange={(e) => { setMesReferencia(e.target.value ? `${anoReferencia}-${e.target.value}` : ''); setResultado(null) }}
                   className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
+                >
+                  <option value="">Selecione o mês</option>
+                  {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((nome, i) => <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>)}
+                </select>
               </div>
+              <input aria-label="Ano da fatura" type="number" min="1900" max="9999" value={anoReferencia} disabled={isUploading || isSaving}
+                className="border rounded-md p-2 w-full"
+                onChange={e => { setAnoReferencia(e.target.value); setMesReferencia(mesReferencia ? `${e.target.value}-${mesReferencia.slice(5)}` : ''); setResultado(null) }} />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Selecione o Formato</label>
-              <Select value={tipo} onValueChange={(val: any) => setTipo(val)}>
+              <Select disabled={isUploading || isSaving} value={tipo} onValueChange={(val: any) => { setTipo(val); setResultado(null) }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Formato do PDF" />
+                  <SelectValue placeholder="Formato do PDF">{tipo === 'elo_ourocard' ? 'Elo Ourocard (Formato Especial)' : 'Genérico (Smiles, Nubank, Itaú)'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="generico">Genérico (Smiles, Nubank, Itaú)</SelectItem>
@@ -180,6 +202,7 @@ export default function ImportarPage() {
               <div className="flex items-center gap-2">
                 <input 
                   type="file" 
+                  disabled={isUploading || isSaving}
                   accept=".pdf" 
                   onChange={handleFileChange}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -190,7 +213,7 @@ export default function ImportarPage() {
 
           <Button 
             onClick={handleUpload} 
-            disabled={!file || isUploading}
+            disabled={!file || !mesValido(mesReferencia) || !cartaoId || isUploading || isSaving}
             className="w-full md:w-auto"
           >
             {isUploading ? (
@@ -210,14 +233,15 @@ export default function ImportarPage() {
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-primary">
-              <CheckCircle2 className="w-5 h-5" /> Sucesso!
+              <CheckCircle2 className="w-5 h-5" /> Confira antes de salvar
             </CardTitle>
             <CardDescription>Veja o que o Claude encontrou no PDF.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="font-semibold">{resultado.arquivoNome} — {cartoes.find(c => c.id === resultado.cartaoId)?.apelido} — Mês: {resultado.mesReferencia}</p>
             <div className="flex gap-4 p-4 rounded-lg bg-background border">
               <div>
-                <p className="text-xs text-muted-foreground uppercase font-bold">Total Encontrado</p>
+                <p className="text-xs text-muted-foreground uppercase font-bold">Total declarado na fatura</p>
                 <p className="text-2xl font-black">{formatarCentavosParaReal(resultado.total_fatura_cents)}</p>
               </div>
               <div className="border-l pl-4">
@@ -225,14 +249,14 @@ export default function ImportarPage() {
                 <p className="text-2xl font-black">{resultado.transacoes?.length || 0}</p>
               </div>
               <div className="border-l pl-4">
-                <p className="text-xs text-muted-foreground uppercase font-bold">Sanity Check</p>
-                {resultado.sanity_ok ? (
+                <p className="text-xs text-muted-foreground uppercase font-bold">Conferência dos valores</p>
+                {resultado.sanity_ok && !resultado.sem_total ? (
                   <p className="text-xl font-bold text-green-500 flex items-center gap-1 mt-1">
                     <CheckCircle2 className="w-5 h-5" /> OK
                   </p>
                 ) : (
                   <p className="text-xl font-bold text-destructive flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-5 h-5" /> FALSO
+                    <AlertCircle className="w-5 h-5" /> Revisar
                   </p>
                 )}
               </div>
@@ -266,8 +290,15 @@ export default function ImportarPage() {
               </table>
             </div>
 
-            <Button className="w-full mt-4" variant="default" onClick={handleSalvar}>
-              Confirmar e Salvar no Banco
+            <p>Soma dos lançamentos: {formatarCentavosParaReal(conferirImportacao(resultado.transacoes, resultado.total_fatura_cents, resultado.sem_total).soma)}</p>
+            {conferirImportacao(resultado.transacoes, resultado.total_fatura_cents, resultado.sem_total).precisaRevisao && (
+              <label className="flex gap-2 border border-amber-500 p-3 rounded-md">
+                <input type="checkbox" checked={revisado} disabled={isSaving} onChange={e => setRevisado(e.target.checked)} />
+                Revisei os lançamentos e a divergência (ou ausência de total). Saldo financiado não é gasto novo. Quero salvar com essa ressalva.
+              </label>
+            )}
+            <Button disabled={isSaving || (conferirImportacao(resultado.transacoes, resultado.total_fatura_cents, resultado.sem_total).precisaRevisao && !revisado)} className="w-full mt-4" variant="default" onClick={handleSalvar}>
+              {isSaving ? 'Salvando...' : `Confirmar e salvar em ${resultado.mesReferencia}`}
             </Button>
           </CardContent>
         </Card>
