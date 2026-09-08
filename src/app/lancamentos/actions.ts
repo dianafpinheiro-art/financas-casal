@@ -31,6 +31,8 @@ export async function updateDivisaoLancamento(
     if (error) throw error
 
     revalidatePath('/lancamentos')
+    revalidatePath('/conferencia')
+    revalidatePath('/')
     return { success: true }
   } catch (error: any) {
     console.error("Erro no update:", error)

@@ -10,7 +10,8 @@ import {
   UploadCloud, 
   Tags,
   Wand2,
-  Wallet
+  Wallet,
+  ListChecks
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,7 @@ const navItems = [
   { name: "Receitas", href: "/receitas", icon: Wallet },
   { name: "Importar", href: "/importar", icon: UploadCloud },
   { name: "Lançamentos", href: "/lancamentos", icon: ListOrdered },
+  { name: "Conferência", href: "/conferencia", icon: ListChecks },
   { name: "Gastos Extras", href: "/gastos-extras", icon: ListOrdered },
   { name: "Cartões", href: "/cartoes", icon: CreditCard },
   { name: "Categorias", href: "/categorias", icon: Tags },
