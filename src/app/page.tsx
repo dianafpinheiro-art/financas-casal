@@ -20,6 +20,13 @@ type LancamentoDashboard = {
 
 type CategoriaDashboard = { id: string; nome: string }
 
+type ReembolsoResumo = {
+  valor: number
+  data_competencia: string
+  credito_para_id: string
+  descricao: string | null
+}
+
 function listarMeses(inicio: string, fim: string) {
   const meses: string[] = []
   const [anoInicial, mesInicial] = inicio.split('-').map(Number)
@@ -47,6 +54,18 @@ function saldoParaMembro1(fechamento: FechamentoMes) {
   return 0
 }
 
+function ehSaldoTransportado(descricao: string | null) {
+  const texto = (descricao || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  return (
+    texto.includes('saldo devedor') &&
+    (texto.includes('trazido') || texto.includes('transportado'))
+  )
+}
+
 export default async function DashboardPage(props: { searchParams: Promise<{ mes?: string }> }) {
   const searchParams = await props.searchParams
   const mes = searchParams.mes || new Date().toISOString().slice(0, 7)
@@ -56,7 +75,7 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
   let todosLancamentos: LancamentoDashboard[] = []
   let categorias: CategoriaDashboard[] = []
   let resumoDesdeJulho: Array<{ mes: string; fechamento: FechamentoMes; saldo: number }> = []
-  let adiantamentos: Array<{ valor: number; data_competencia: string; credito_para_id: string }> = []
+  let adiantamentos: ReembolsoResumo[] = []
 
   try {
     const grupoId = await getCurrentGroupId()
@@ -67,18 +86,21 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
     const inicioJanela = `${anoJanela - 1}-${String(mesJanela).padStart(2, '0')}-01`
     const mesesDesdeJulho = mes >= '2026-07' ? listarMeses('2026-07', mes) : []
     const mesesParaCalculo = mesesDesdeJulho.length > 0 ? mesesDesdeJulho : [mes]
-    const adiantamentosPromise = mesesDesdeJulho.length > 0
+    const [anoFimResumo, mesFimResumo] = mes.split('-').map(Number)
+    const fimResumo = mesFimResumo === 12
+      ? `${anoFimResumo + 1}-01-01`
+      : `${anoFimResumo}-${String(mesFimResumo + 1).padStart(2, '0')}-01`
+    const reembolsosResumoPromise = mesesDesdeJulho.length > 0
       ? supabase
         .from('reembolsos')
-        .select('valor, data_competencia, credito_para_id')
+        .select('valor, data_competencia, credito_para_id, descricao')
         .eq('grupo_id', grupoId)
         .gte('data_competencia', '2026-07-01')
-        .lt('data_competencia', '2026-08-01')
-        .ilike('descricao', '%adiantamento%')
+        .lt('data_competencia', fimResumo)
       : Promise.resolve({ data: [] })
 
     // Queries em paralelo em vez de sequenciais
-    const [fechamentosRes, lancRes, catRes, adiantamentosRes] = await Promise.all([
+    const [fechamentosRes, lancRes, catRes, reembolsosResumoRes] = await Promise.all([
       calcularFechamentosDoPeriodo(mesesParaCalculo),
       buscarTodasPaginas((inicio, fim) => supabase
         .from('lancamentos')
@@ -91,16 +113,24 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
         .select('id, nome')
         .eq('grupo_id', grupoId)
         .order('nome', { ascending: true }),
-      adiantamentosPromise,
+      reembolsosResumoPromise,
     ])
 
     fechamento = fechamentosRes[mes]
+    const reembolsosResumo = (reembolsosResumoRes.data || []) as ReembolsoResumo[]
+    const saldosTransportados = reembolsosResumo.filter((item) => ehSaldoTransportado(item.descricao))
     resumoDesdeJulho = mesesDesdeJulho.map((mesResumo) => ({
       mes: mesResumo,
       fechamento: fechamentosRes[mesResumo],
-      saldo: saldoParaMembro1(fechamentosRes[mesResumo]),
+      saldo: saldoParaMembro1(fechamentosRes[mesResumo]) - saldosTransportados
+        .filter((item) => item.data_competencia.slice(0, 7) === mesResumo)
+        .reduce((total, item) => {
+          if (item.credito_para_id === fechamentosRes[mesResumo].membro1.id) return total + item.valor
+          if (item.credito_para_id === fechamentosRes[mesResumo].membro2.id) return total - item.valor
+          return total
+        }, 0),
     }))
-    adiantamentos = (adiantamentosRes.data || []) as typeof adiantamentos
+    adiantamentos = reembolsosResumo.filter((item) => item.descricao?.toLowerCase().includes('adiantamento'))
     todosLancamentos = lancRes.data || []
     categorias = catRes.data || []
   } catch (e: unknown) {
@@ -220,7 +250,7 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
                   Acerto acumulado desde julho
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Com base nas divisões conferidas no app e já descontando o adiantamento de {dataAdiantamento}.
+                  Com base nas divisões conferidas, sem repetir saldos transportados e já descontando o adiantamento de {dataAdiantamento}.
                 </CardDescription>
               </div>
               {totalAdiantado > 0 && (
