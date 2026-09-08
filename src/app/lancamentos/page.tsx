@@ -16,6 +16,7 @@ export default async function LancamentosPage() {
         id,
         cartao_id,
         data_lancamento,
+        data_competencia,
         descricao,
         merchant,
         observacao,
@@ -42,6 +43,7 @@ export default async function LancamentosPage() {
   const formattedData: Lancamento[] = (lancamentos || []).map((l: any) => ({
     id: l.id,
     data_lancamento: l.data_lancamento || '',
+    data_competencia: l.data_competencia || '',
     descricao: l.descricao,
     merchant: l.merchant || '',
     observacao: l.observacao || '',

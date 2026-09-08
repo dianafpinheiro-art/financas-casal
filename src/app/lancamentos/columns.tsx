@@ -28,6 +28,7 @@ import { toast } from "sonner"
 export type Lancamento = {
   id: string
   data_lancamento: string
+  data_competencia: string
   descricao: string
   merchant: string
   observacao: string
@@ -61,6 +62,10 @@ export const columns: ColumnDef<Lancamento>[] = [
     ),
     enableSorting: false,
     enableHiding: false,
+  },
+  {
+    accessorKey: "data_competencia",
+    header: "Competência",
   },
   {
     accessorKey: "data_lancamento",
