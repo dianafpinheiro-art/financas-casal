@@ -8,6 +8,7 @@ import { excluirLancamento, updateDetalheLancamento, updateDivisaoLancamento } f
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { extrairDetalheUsuario, removerDetalheUsuario } from "@/lib/lancamentos/detalhe-usuario"
 import { formatarCentavosParaReal } from "@/lib/utils/centavos"
 import { cn } from "@/lib/utils"
 
@@ -78,7 +79,12 @@ export function ConferenciaClient({
   mesSelecionado: string
 }) {
   const router = useRouter()
-  const [itens, setItens] = React.useState(itensIniciais)
+  const itensPreparados = React.useMemo(() => itensIniciais.map((item) => ({
+    ...item,
+    observacao: removerDetalheUsuario(item.observacao),
+    detalhe: item.detalhe || extrairDetalheUsuario(item.observacao),
+  })), [itensIniciais])
+  const [itens, setItens] = React.useState(itensPreparados)
   const [cartao, setCartao] = React.useState("todos")
   const [busca, setBusca] = React.useState("")
   const [somentePendentes, setSomentePendentes] = React.useState(false)
@@ -87,7 +93,7 @@ export function ConferenciaClient({
   const [excluindo, setExcluindo] = React.useState<string | null>(null)
   const [salvandoDetalhe, setSalvandoDetalhe] = React.useState<string | null>(null)
   const [detalhes, setDetalhes] = React.useState<Record<string, string>>(() =>
-    Object.fromEntries(itensIniciais.map((item) => [item.id, item.detalhe]))
+    Object.fromEntries(itensPreparados.map((item) => [item.id, item.detalhe]))
   )
   const [personalizadoAberto, setPersonalizadoAberto] = React.useState<string | null>(null)
   const [percentual, setPercentual] = React.useState("50")
