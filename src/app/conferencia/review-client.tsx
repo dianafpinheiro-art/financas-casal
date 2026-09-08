@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, ReceiptText, Search } from "lucide-react"
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, ReceiptText, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { updateDivisaoLancamento } from "@/app/lancamentos/actions"
+import { excluirLancamento, updateDivisaoLancamento } from "@/app/lancamentos/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -83,6 +83,7 @@ export function ConferenciaClient({
   const [somentePendentes, setSomentePendentes] = React.useState(false)
   const [somenteDuplicados, setSomenteDuplicados] = React.useState(false)
   const [salvando, setSalvando] = React.useState<string | null>(null)
+  const [excluindo, setExcluindo] = React.useState<string | null>(null)
   const [personalizadoAberto, setPersonalizadoAberto] = React.useState<string | null>(null)
   const [percentual, setPercentual] = React.useState("50")
   const [conferidos, setConferidos] = React.useState<Set<string>>(new Set())
@@ -194,6 +195,29 @@ export function ConferenciaClient({
     aplicarDivisao(item, "personalizado", valor)
   }
 
+  async function apagarDuplicado(item: ConferenciaItem) {
+    const nome = item.merchant || item.descricao
+    const confirmou = window.confirm(
+      `Apagar este lançamento?\n\n${nome}\n${formatarData(item.data_lancamento)} · ${formatarCentavosParaReal(item.valor)}\n\nEssa ação não pode ser desfeita.`
+    )
+    if (!confirmou) return
+
+    setExcluindo(item.id)
+    const resultado = await excluirLancamento(item.id)
+    if (!resultado.success) {
+      toast.error(resultado.message || "Não foi possível apagar o lançamento.")
+      setExcluindo(null)
+      return
+    }
+
+    setItens((atuais) => atuais.filter((atual) => atual.id !== item.id))
+    const proximos = new Set(conferidos)
+    proximos.delete(item.id)
+    salvarConferidos(proximos)
+    setExcluindo(null)
+    toast.success("Cópia apagada do app.")
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
@@ -292,7 +316,21 @@ export function ConferenciaClient({
                           <span className="text-xs font-medium text-muted-foreground">{formatarData(item.data_lancamento)}</span>
                           <Badge variant="outline">{item.categoria}</Badge>
                           {item.parcela_atual && item.parcela_total && <Badge variant="secondary">Parcela {item.parcela_atual}/{item.parcela_total}</Badge>}
-                          {duplicado && <Badge className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"><AlertTriangle className="mr-1 h-3 w-3" />Possível duplicidade</Badge>}
+                          {duplicado && (
+                            <>
+                              <Badge className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"><AlertTriangle className="mr-1 h-3 w-3" />Possível duplicidade</Badge>
+                              <button
+                                type="button"
+                                aria-label={`Apagar possível duplicidade: ${item.merchant || item.descricao}`}
+                                title="Apagar esta cópia"
+                                disabled={excluindo === item.id}
+                                onClick={() => apagarDuplicado(item)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/5 text-red-600 transition-colors hover:bg-red-500/15 disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                         <p className="font-semibold">{item.merchant || item.descricao}</p>
                         {item.merchant && item.merchant !== item.descricao && <p className="text-xs text-muted-foreground">Na fatura: {item.descricao}</p>}

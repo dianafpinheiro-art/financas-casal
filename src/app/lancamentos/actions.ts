@@ -88,6 +88,35 @@ export async function updateDivisaoLancamentosEmLote(
   }
 }
 
+export async function excluirLancamento(id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    return { success: false, message: "Lançamento inválido." }
+  }
+
+  try {
+    const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
+    const { error } = await supabase
+      .from("lancamentos")
+      .delete()
+      .eq("id", id)
+      .eq("grupo_id", grupoId)
+
+    if (error) throw error
+
+    revalidatePath("/lancamentos")
+    revalidatePath("/conferencia")
+    revalidatePath("/")
+    return { success: true }
+  } catch (error: unknown) {
+    console.error("Erro ao excluir lançamento:", error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Não foi possível excluir o lançamento.",
+    }
+  }
+}
+
 export async function getCategorias() {
   const supabase = await createClient()
   const grupoId = await getCurrentGroupId()
