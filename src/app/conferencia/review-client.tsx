@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, ReceiptText, Search, Trash2 } from "lucide-react"
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, ReceiptText, Save, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { excluirLancamento, updateDivisaoLancamento } from "@/app/lancamentos/actions"
+import { excluirLancamento, updateDetalheLancamento, updateDivisaoLancamento } from "@/app/lancamentos/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,7 @@ export type ConferenciaItem = {
   descricao: string
   merchant: string
   observacao: string
+  detalhe: string
   valor: number
   cartao_apelido: string
   eh_extra: boolean
@@ -84,6 +85,10 @@ export function ConferenciaClient({
   const [somenteDuplicados, setSomenteDuplicados] = React.useState(false)
   const [salvando, setSalvando] = React.useState<string | null>(null)
   const [excluindo, setExcluindo] = React.useState<string | null>(null)
+  const [salvandoDetalhe, setSalvandoDetalhe] = React.useState<string | null>(null)
+  const [detalhes, setDetalhes] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(itensIniciais.map((item) => [item.id, item.detalhe]))
+  )
   const [personalizadoAberto, setPersonalizadoAberto] = React.useState<string | null>(null)
   const [percentual, setPercentual] = React.useState("50")
   const [conferidos, setConferidos] = React.useState<Set<string>>(new Set())
@@ -123,11 +128,11 @@ export function ConferenciaClient({
     if (somentePendentes && conferidos.has(item.id)) return false
     if (somenteDuplicados && (contagemDuplicados.get(chaveDuplicidade(item)) || 0) < 2) return false
     if (busca) {
-      const alvo = normalizar(`${item.descricao} ${item.merchant} ${item.categoria}`)
+      const alvo = normalizar(`${item.descricao} ${item.merchant} ${item.categoria} ${detalhes[item.id] || item.detalhe}`)
       if (!alvo.includes(normalizar(busca))) return false
     }
     return true
-  }), [itens, cartao, somentePendentes, somenteDuplicados, busca, conferidos, contagemDuplicados])
+  }), [itens, cartao, somentePendentes, somenteDuplicados, busca, conferidos, contagemDuplicados, detalhes])
 
   const grupos = React.useMemo(() => {
     const resultado = new Map<string, ConferenciaItem[]>()
@@ -216,6 +221,27 @@ export function ConferenciaClient({
     salvarConferidos(proximos)
     setExcluindo(null)
     toast.success("Cópia apagada do app.")
+  }
+
+  async function salvarDetalhe(item: ConferenciaItem) {
+    const detalhe = (detalhes[item.id] || "").replace(/\s+/g, " ").trim()
+    if (detalhe === item.detalhe) return
+
+    setSalvandoDetalhe(item.id)
+    const resultado = await updateDetalheLancamento(item.id, detalhe)
+    if (!resultado.success) {
+      toast.error(resultado.message || "Não foi possível salvar o detalhe.")
+      setSalvandoDetalhe(null)
+      return
+    }
+
+    setDetalhes((atuais) => ({ ...atuais, [item.id]: resultado.detalhe || "" }))
+    setItens((atuais) => atuais.map((atual) => atual.id === item.id
+      ? { ...atual, detalhe: resultado.detalhe || "" }
+      : atual
+    ))
+    setSalvandoDetalhe(null)
+    toast.success(detalhe ? "Detalhe salvo." : "Detalhe removido.")
   }
 
   return (
@@ -336,6 +362,35 @@ export function ConferenciaClient({
                         {item.merchant && item.merchant !== item.descricao && <p className="text-xs text-muted-foreground">Na fatura: {item.descricao}</p>}
                         {item.observacao && <p className="mt-1 text-xs text-muted-foreground">Nota: {item.observacao}</p>}
                         {item.eh_extra && <p className="mt-1 text-xs text-muted-foreground">Pago por: {item.pago_por}</p>}
+                        <form
+                          className="mt-3"
+                          onSubmit={(event) => {
+                            event.preventDefault()
+                            salvarDetalhe(item)
+                          }}
+                        >
+                          <label htmlFor={`detalhe-${item.id}`} className="mb-1 block text-xs font-medium text-muted-foreground">Do que se trata?</label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id={`detalhe-${item.id}`}
+                              value={detalhes[item.id] || ""}
+                              maxLength={240}
+                              onChange={(event) => setDetalhes((atuais) => ({ ...atuais, [item.id]: event.target.value }))}
+                              placeholder="Ex.: itens da casa, presente, compra pessoal…"
+                              className="h-10 bg-background"
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              variant={(detalhes[item.id] || "").trim() === item.detalhe ? "outline" : "default"}
+                              disabled={salvandoDetalhe === item.id || (detalhes[item.id] || "").trim() === item.detalhe}
+                              className="h-10 shrink-0"
+                            >
+                              <Save className="mr-1.5 h-4 w-4" />
+                              {salvandoDetalhe === item.id ? "Salvando…" : "Salvar"}
+                            </Button>
+                          </div>
+                        </form>
                       </div>
 
                       <div className="xl:text-right">

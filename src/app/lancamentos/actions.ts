@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getCurrentGroupId } from '@/lib/auth/group'
+import { atualizarDetalheUsuario } from '@/lib/lancamentos/detalhe-usuario'
 
 export async function updateDivisaoLancamento(
   id: string, 
@@ -34,9 +35,9 @@ export async function updateDivisaoLancamento(
     revalidatePath('/conferencia')
     revalidatePath('/')
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Erro no update:", error)
-    return { success: false, message: error.message || "Erro desconhecido" }
+    return { success: false, message: error instanceof Error ? error.message : "Erro desconhecido" }
   }
 }
 
@@ -141,8 +142,8 @@ export async function updateCategoriaLancamento(
 
     revalidatePath('/lancamentos')
     return { success: true }
-  } catch (error: any) {
-    return { success: false, message: error.message }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Erro desconhecido" }
   }
 }
 
@@ -163,8 +164,8 @@ export async function updateEstabelecimentoLancamento(
 
     revalidatePath('/lancamentos')
     return { success: true }
-  } catch (error: any) {
-    return { success: false, message: error.message }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Erro desconhecido" }
   }
 }
 
@@ -185,7 +186,48 @@ export async function updateObservacaoLancamento(
 
     revalidatePath('/lancamentos')
     return { success: true }
-  } catch (error: any) {
-    return { success: false, message: error.message }
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : "Erro desconhecido" }
+  }
+}
+
+export async function updateDetalheLancamento(lancamentoId: string, detalhe: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lancamentoId)) {
+    return { success: false, message: "Lançamento inválido." }
+  }
+
+  if (typeof detalhe !== "string" || detalhe.length > 240) {
+    return { success: false, message: "O detalhe deve ter no máximo 240 caracteres." }
+  }
+
+  try {
+    const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
+    const { data: lancamento, error: erroBusca } = await supabase
+      .from("lancamentos")
+      .select("observacao")
+      .eq("id", lancamentoId)
+      .eq("grupo_id", grupoId)
+      .single()
+
+    if (erroBusca) throw erroBusca
+
+    const { error: erroUpdate } = await supabase
+      .from("lancamentos")
+      .update({ observacao: atualizarDetalheUsuario(lancamento.observacao, detalhe) })
+      .eq("id", lancamentoId)
+      .eq("grupo_id", grupoId)
+
+    if (erroUpdate) throw erroUpdate
+
+    revalidatePath("/lancamentos")
+    revalidatePath("/conferencia")
+    return { success: true, detalhe: detalhe.replace(/\s+/g, " ").trim() }
+  } catch (error: unknown) {
+    console.error("Erro ao salvar detalhe do lançamento:", error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Não foi possível salvar o detalhe.",
+    }
   }
 }

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCurrentGroupId } from "@/lib/auth/group"
 import { buscarTodasPaginas } from "@/lib/supabase/paginar"
 import { ConferenciaClient, ConferenciaItem } from "./review-client"
+import { extrairDetalheUsuario, removerDetalheUsuario } from "@/lib/lancamentos/detalhe-usuario"
 
 type LancamentoBanco = {
   id: string
@@ -107,7 +108,8 @@ export default async function ConferenciaPage({
       data_competencia: item.data_competencia || "",
       descricao: item.descricao || "Sem descrição",
       merchant: item.merchant || "",
-      observacao: item.observacao || "",
+      observacao: removerDetalheUsuario(item.observacao),
+      detalhe: extrairDetalheUsuario(item.observacao),
       valor: item.valor,
       cartao_apelido: cartaoRelacionado?.apelido || (item.cartao_id === null ? "Despesas extras" : "Cartão desconhecido"),
       eh_extra: item.cartao_id === null,
