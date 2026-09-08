@@ -84,7 +84,9 @@ export default async function ConferenciaPage({
         .eq("grupo_id", grupoId)
         .gte("data_competencia", `${mesSelecionado}-01`)
         .lt("data_competencia", `${proximoMes(mesSelecionado)}-01`)
-        .order("data_lancamento", { ascending: true })
+        // Cada importacao grava `criado_em` na mesma sequencia das linhas do PDF.
+        // Ordenar pela data da compra embaralhava parcelamentos e blocos da fatura.
+        .order("criado_em", { ascending: true })
         .order("id")
         .range(inicio, fim)
     ),
