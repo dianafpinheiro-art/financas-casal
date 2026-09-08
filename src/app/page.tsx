@@ -1,9 +1,9 @@
 import { getCurrentGroupId } from "@/lib/auth/group"
-import { calcularFechamentoDoMes } from "@/lib/acerto/calcular"
+import { calcularFechamentosDoPeriodo, FechamentoMes } from "@/lib/acerto/calcular"
 import { createClient } from "@/lib/supabase/server"
 import { formatarCentavosParaReal } from "@/lib/utils/centavos"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowRightLeft, CreditCard, DollarSign, Wallet } from "lucide-react"
+import { ArrowRightLeft, CalendarRange, CreditCard, DollarSign, Wallet } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { MonthSelector } from "@/components/month-selector"
@@ -12,14 +12,51 @@ import { GraficoEvolucao } from "@/components/graficos/GraficoEvolucao"
 import { ResumoParcelados } from "@/components/resumos/ResumoParcelados"
 import { buscarTodasPaginas } from '@/lib/supabase/paginar'
 
+type LancamentoDashboard = {
+  data_competencia: string | null
+  observacao: string | null
+  [campo: string]: unknown
+}
+
+type CategoriaDashboard = { id: string; nome: string }
+
+function listarMeses(inicio: string, fim: string) {
+  const meses: string[] = []
+  const [anoInicial, mesInicial] = inicio.split('-').map(Number)
+  const [anoFinal, mesFinal] = fim.split('-').map(Number)
+  const cursor = new Date(Date.UTC(anoInicial, mesInicial - 1, 1))
+  const limite = new Date(Date.UTC(anoFinal, mesFinal - 1, 1))
+
+  while (cursor <= limite) {
+    meses.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`)
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1)
+  }
+
+  return meses
+}
+
+function rotuloMes(mes: string) {
+  const data = new Date(`${mes}-01T00:00:00Z`)
+  const rotulo = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(data)
+  return rotulo.charAt(0).toUpperCase() + rotulo.slice(1)
+}
+
+function saldoParaMembro1(fechamento: FechamentoMes) {
+  if (fechamento.saldoFinal.quemRecebeId === fechamento.membro1.id) return fechamento.saldoFinal.valor
+  if (fechamento.saldoFinal.quemPagaId === fechamento.membro1.id) return -fechamento.saldoFinal.valor
+  return 0
+}
+
 export default async function DashboardPage(props: { searchParams: Promise<{ mes?: string }> }) {
   const searchParams = await props.searchParams
   const mes = searchParams.mes || new Date().toISOString().slice(0, 7)
   
   let fechamento = null
   let errorMessage = null
-  let todosLancamentos: any[] = []
-  let categorias: any[] = []
+  let todosLancamentos: LancamentoDashboard[] = []
+  let categorias: CategoriaDashboard[] = []
+  let resumoDesdeJulho: Array<{ mes: string; fechamento: FechamentoMes; saldo: number }> = []
+  let adiantamentos: Array<{ valor: number; data_competencia: string; credito_para_id: string }> = []
 
   try {
     const grupoId = await getCurrentGroupId()
@@ -28,10 +65,21 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
     // Janela de 12 meses pro gráfico de evolução (antes baixava a base inteira)
     const [anoJanela, mesJanela] = mes.split('-').map(Number)
     const inicioJanela = `${anoJanela - 1}-${String(mesJanela).padStart(2, '0')}-01`
+    const mesesDesdeJulho = mes >= '2026-07' ? listarMeses('2026-07', mes) : []
+    const mesesParaCalculo = mesesDesdeJulho.length > 0 ? mesesDesdeJulho : [mes]
+    const adiantamentosPromise = mesesDesdeJulho.length > 0
+      ? supabase
+        .from('reembolsos')
+        .select('valor, data_competencia, credito_para_id')
+        .eq('grupo_id', grupoId)
+        .gte('data_competencia', '2026-07-01')
+        .lt('data_competencia', '2026-08-01')
+        .ilike('descricao', '%adiantamento%')
+      : Promise.resolve({ data: [] })
 
     // Queries em paralelo em vez de sequenciais
-    const [fechamentoRes, lancRes, catRes] = await Promise.all([
-      calcularFechamentoDoMes(mes),
+    const [fechamentosRes, lancRes, catRes, adiantamentosRes] = await Promise.all([
+      calcularFechamentosDoPeriodo(mesesParaCalculo),
       buscarTodasPaginas((inicio, fim) => supabase
         .from('lancamentos')
         .select('id, descricao, observacao, valor, data_competencia, data_lancamento, categoria_id, parcela_atual, parcela_total, divisao_tipo, divisao_pct_diana, cartoes(apelido), categorias(nome)')
@@ -43,13 +91,20 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
         .select('id, nome')
         .eq('grupo_id', grupoId)
         .order('nome', { ascending: true }),
+      adiantamentosPromise,
     ])
 
-    fechamento = fechamentoRes
+    fechamento = fechamentosRes[mes]
+    resumoDesdeJulho = mesesDesdeJulho.map((mesResumo) => ({
+      mes: mesResumo,
+      fechamento: fechamentosRes[mesResumo],
+      saldo: saldoParaMembro1(fechamentosRes[mesResumo]),
+    }))
+    adiantamentos = (adiantamentosRes.data || []) as typeof adiantamentos
     todosLancamentos = lancRes.data || []
     categorias = catRes.data || []
-  } catch (e: any) {
-    errorMessage = e.message
+  } catch (e: unknown) {
+    errorMessage = e instanceof Error ? e.message : 'Erro desconhecido ao calcular o fechamento.'
   }
 
   if (errorMessage || !fechamento) {
@@ -65,6 +120,19 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
 
   const { saldoFinal, membro1, membro2 } = fechamento
   const totalGasto = membro1.totalGasto
+  const saldoAcumulado = resumoDesdeJulho.reduce((total, item) => total + item.saldo, 0)
+  const impactoAdiantamentos = adiantamentos.reduce((total, item) => {
+    if (item.credito_para_id === membro1.id) return total + item.valor
+    if (item.credito_para_id === membro2.id) return total - item.valor
+    return total
+  }, 0)
+  const totalAdiantado = adiantamentos.reduce((total, item) => total + item.valor, 0)
+  const saldoJulho = resumoDesdeJulho.find((item) => item.mes === '2026-07')?.saldo ?? 0
+  const saldoJulhoAntesDoAdiantamento = saldoJulho - impactoAdiantamentos
+  const dataAdiantamento = adiantamentos[0]?.data_competencia
+    ? new Date(`${adiantamentos[0].data_competencia.slice(0, 10)}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+    : '05/07/2026'
+  const ultimoMesResumo = resumoDesdeJulho.at(-1)?.mes
   return (
     <div className="max-w-5xl mx-auto space-y-8 print:space-y-4">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -141,6 +209,62 @@ export default async function DashboardPage(props: { searchParams: Promise<{ mes
           </CardContent>
         </Card>
       </div>
+
+      {resumoDesdeJulho.length > 0 && (
+        <Card className="overflow-hidden border-violet-500/30 bg-gradient-to-br from-violet-500/[0.08] via-card to-blue-500/[0.06]">
+          <CardHeader className="border-b border-violet-500/15">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <CalendarRange className="h-5 w-5 text-violet-600" />
+                  Acerto acumulado desde julho
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Com base nas divisões conferidas no app e já descontando o adiantamento de {dataAdiantamento}.
+                </CardDescription>
+              </div>
+              {totalAdiantado > 0 && (
+                <div className="shrink-0 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-right">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">Adiantamento</p>
+                  <p className="font-bold text-blue-700 dark:text-blue-300">− {formatarCentavosParaReal(totalAdiantado)}</p>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5 pt-6">
+            <div className="grid gap-3 md:grid-cols-3">
+              {resumoDesdeJulho.map((item) => (
+                <div key={item.mes} className="rounded-xl border bg-background/80 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{rotuloMes(item.mes)}</p>
+                  <p className={`mt-2 text-lg font-bold ${item.saldo < 0 ? 'text-blue-600' : item.saldo > 0 ? 'text-violet-700 dark:text-violet-300' : 'text-emerald-600'}`}>
+                    {item.saldo === 0 ? 'Tudo zerado' : formatarCentavosParaReal(Math.abs(item.saldo))}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.saldo > 0 ? 'Nicco devia à Diana' : item.saldo < 0 ? 'Crédito restante do Nicco' : 'Sem saldo entre os dois'}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {totalAdiantado > 0 && (
+              <div className="rounded-xl border border-dashed bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                Em julho, antes do adiantamento, Nicco devia <strong className="text-foreground">{formatarCentavosParaReal(Math.abs(saldoJulhoAntesDoAdiantamento))}</strong>.
+                Depois dos {formatarCentavosParaReal(totalAdiantado)}, restou um crédito de <strong className="text-blue-600">{formatarCentavosParaReal(Math.abs(saldoJulho))}</strong> para ele.
+              </div>
+            )}
+
+            <div className="flex flex-col justify-between gap-3 rounded-2xl bg-violet-700 p-5 text-white sm:flex-row sm:items-center">
+              <div>
+                <p className="text-sm text-violet-100">Saldo acumulado até {ultimoMesResumo ? rotuloMes(ultimoMesResumo) : ''}</p>
+                <p className="text-lg font-semibold">
+                  {saldoAcumulado > 0 ? 'Nicco deve à Diana' : saldoAcumulado < 0 ? 'Diana deve ao Nicco' : 'Tudo acertado'}
+                </p>
+              </div>
+              <p className="text-3xl font-black tracking-tight">{formatarCentavosParaReal(Math.abs(saldoAcumulado))}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Gráficos */}
       <div className="grid gap-4 md:grid-cols-2 mt-8 print:hidden">

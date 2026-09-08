@@ -28,118 +28,91 @@ export type FechamentoMes = {
   }
 }
 
-export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<FechamentoMes> {
-  const supabase = await createClient()
-  const grupoId = await getCurrentGroupId()
+type MembroAcerto = { id: string; apelido: string }
 
-  const inicioMes = `${mesCompetencia}-01`
+type LancamentoAcerto = {
+  valor: number
+  pago_por_id: string | null
+  divisao_tipo: string
+  divisao_pct_diana: number | null
+  data_competencia?: string | null
+  cartoes: { membro_id: string | null } | { membro_id: string | null }[] | null
+}
 
+type ReembolsoAcerto = {
+  valor: number
+  credito_para_id: string
+  data_competencia?: string | null
+}
+
+function inicioDoProximoMes(mesCompetencia: string) {
   const [ano, mes] = mesCompetencia.split('-').map(Number)
   const proximoMes = mes === 12 ? 1 : mes + 1
   const proximoAno = mes === 12 ? ano + 1 : ano
-  const inicioProximoMes = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`
+  return `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`
+}
 
-  // Dispara as 3 queries em paralelo em vez de esperar uma por uma
-  const [membrosRes, lancamentosRes, reembolsosRes] = await Promise.all([
-    supabase
-      .from('membros')
-      .select('id, apelido')
-      .eq('grupo_id', grupoId)
-      .order('papel', { ascending: true }),
-    buscarTodasPaginas((inicio, fim) => supabase
-      .from('lancamentos')
-      .select('valor, pago_por_id, divisao_tipo, divisao_pct_diana, cartoes(membro_id)')
-      .eq('grupo_id', grupoId)
-      .gte('data_competencia', inicioMes)
-      .lt('data_competencia', inicioProximoMes)
-      .order('id').range(inicio, fim)),
-    supabase
-      .from('reembolsos')
-      .select('valor, credito_para_id')
-      .eq('grupo_id', grupoId)
-      .gte('data_competencia', inicioMes)
-      .lt('data_competencia', inicioProximoMes),
-  ])
-
-  const membros = membrosRes.data
-
-  if (!membros || membros.length < 2) {
-    throw new Error("São necessários no mínimo 2 membros no grupo para o cálculo.")
+function calcularComDados(
+  membros: MembroAcerto[],
+  lancamentos: LancamentoAcerto[],
+  reembolsos: ReembolsoAcerto[],
+): FechamentoMes {
+  if (membros.length < 2) {
+    throw new Error('São necessários no mínimo 2 membros no grupo para o cálculo.')
   }
 
   const membro1 = membros[0]
   const membro2 = membros[1]
-
-  const { data: lancamentos, error } = lancamentosRes as { data: any[] | null, error: any }
-
-  if (error || !lancamentos) {
-    throw new Error("Erro ao buscar lançamentos: " + error?.message)
-  }
-
   let totalGasto = 0
   let totalMembro1Pagou = 0
   let totalMembro2Pagou = 0
-
   let membro1DeveParaMembro2 = 0
   let membro2DeveParaMembro1 = 0
 
-  for (const l of lancamentos) {
-    totalGasto += l.valor
+  for (const lancamento of lancamentos) {
+    totalGasto += lancamento.valor
 
-    const pagadorId = l.pago_por_id || l.cartoes?.membro_id
+    const cartao = Array.isArray(lancamento.cartoes) ? lancamento.cartoes[0] : lancamento.cartoes
+    const pagadorId = lancamento.pago_por_id || cartao?.membro_id
 
-    if (pagadorId === membro1.id) {
-      totalMembro1Pagou += l.valor
-    } else if (pagadorId === membro2.id) {
-      totalMembro2Pagou += l.valor
-    }
+    if (pagadorId === membro1.id) totalMembro1Pagou += lancamento.valor
+    else if (pagadorId === membro2.id) totalMembro2Pagou += lancamento.valor
 
     let pctMembro1 = 0
-    let pctMembro2 = 0
 
-    switch (l.divisao_tipo) {
+    switch (lancamento.divisao_tipo) {
       case 'dividir':
         pctMembro1 = 50
-        pctMembro2 = 50
         break
-      case 'so_diana': // Mapeado para membro1
+      case 'so_diana':
         pctMembro1 = 100
         break
-      case 'so_nicco': // Mapeado para membro2
-        pctMembro2 = 100
+      case 'so_nicco':
         break
       case 'personalizado':
-        pctMembro1 = l.divisao_pct_diana || 50
-        pctMembro2 = 100 - pctMembro1
+        pctMembro1 = lancamento.divisao_pct_diana ?? 50
         break
       case 'nao_classificado':
         continue
     }
 
-    const valorResponsabilidadeMembro1 = Math.round((l.valor * pctMembro1) / 100)
-    const valorResponsabilidadeMembro2 = l.valor - valorResponsabilidadeMembro1
+    const responsabilidadeMembro1 = Math.round((lancamento.valor * pctMembro1) / 100)
+    const responsabilidadeMembro2 = lancamento.valor - responsabilidadeMembro1
 
-    if (pagadorId === membro1.id) {
-      membro2DeveParaMembro1 += valorResponsabilidadeMembro2
-    } else if (pagadorId === membro2.id) {
-      membro1DeveParaMembro2 += valorResponsabilidadeMembro1
-    }
+    if (pagadorId === membro1.id) membro2DeveParaMembro1 += responsabilidadeMembro2
+    else if (pagadorId === membro2.id) membro1DeveParaMembro2 += responsabilidadeMembro1
   }
 
-  const reembolsos = reembolsosRes.data
-
-  let totalReembolsosMembro2 = 0
   let totalReembolsosMembro1 = 0
+  let totalReembolsosMembro2 = 0
 
-  if (reembolsos) {
-    for (const r of reembolsos) {
-      if (r.credito_para_id === membro2.id) {
-        totalReembolsosMembro2 += r.valor
-        membro1DeveParaMembro2 += r.valor 
-      } else if (r.credito_para_id === membro1.id) {
-        totalReembolsosMembro1 += r.valor
-        membro2DeveParaMembro1 += r.valor 
-      }
+  for (const reembolso of reembolsos) {
+    if (reembolso.credito_para_id === membro2.id) {
+      totalReembolsosMembro2 += reembolso.valor
+      membro1DeveParaMembro2 += reembolso.valor
+    } else if (reembolso.credito_para_id === membro1.id) {
+      totalReembolsosMembro1 += reembolso.valor
+      membro2DeveParaMembro1 += reembolso.valor
     }
   }
 
@@ -167,25 +140,83 @@ export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<F
     membro1: {
       id: membro1.id,
       nome: membro1.apelido,
-      totalGasto: totalGasto, // Gasto total não é por membro aqui, mas enviaremos igual
+      totalGasto,
       totalPago: totalMembro1Pagou,
       deveParaOutro: membro1DeveParaMembro2,
-      totalReembolsos: totalReembolsosMembro1
+      totalReembolsos: totalReembolsosMembro1,
     },
     membro2: {
       id: membro2.id,
       nome: membro2.apelido,
-      totalGasto: totalGasto,
+      totalGasto,
       totalPago: totalMembro2Pagou,
       deveParaOutro: membro2DeveParaMembro1,
-      totalReembolsos: totalReembolsosMembro2
+      totalReembolsos: totalReembolsosMembro2,
     },
     saldoFinal: {
       quemPagaId,
       quemPagaNome,
       quemRecebeId,
       quemRecebeNome,
-      valor: valorSaldo
-    }
+      valor: valorSaldo,
+    },
   }
+}
+
+export async function calcularFechamentosDoPeriodo(meses: string[]): Promise<Record<string, FechamentoMes>> {
+  const mesesUnicos = Array.from(new Set(meses.filter((mes) => /^\d{4}-\d{2}$/.test(mes)))).sort()
+  if (mesesUnicos.length === 0) return {}
+
+  const supabase = await createClient()
+  const grupoId = await getCurrentGroupId()
+  const inicioPeriodo = `${mesesUnicos[0]}-01`
+  const fimPeriodo = inicioDoProximoMes(mesesUnicos[mesesUnicos.length - 1])
+
+  const [membrosRes, lancamentosRes, reembolsosRes] = await Promise.all([
+    supabase
+      .from('membros')
+      .select('id, apelido')
+      .eq('grupo_id', grupoId)
+      .order('papel', { ascending: true }),
+    buscarTodasPaginas((inicio, fim) => supabase
+      .from('lancamentos')
+      .select('valor, pago_por_id, divisao_tipo, divisao_pct_diana, data_competencia, cartoes(membro_id)')
+      .eq('grupo_id', grupoId)
+      .gte('data_competencia', inicioPeriodo)
+      .lt('data_competencia', fimPeriodo)
+      .order('id')
+      .range(inicio, fim)),
+    buscarTodasPaginas((inicio, fim) => supabase
+      .from('reembolsos')
+      .select('valor, credito_para_id, data_competencia')
+      .eq('grupo_id', grupoId)
+      .gte('data_competencia', inicioPeriodo)
+      .lt('data_competencia', fimPeriodo)
+      .order('id')
+      .range(inicio, fim)),
+  ])
+
+  if (membrosRes.error) throw new Error(`Erro ao buscar membros: ${membrosRes.error.message}`)
+
+  const membros = (membrosRes.data || []) as MembroAcerto[]
+  const lancamentos = lancamentosRes.data as LancamentoAcerto[]
+  const reembolsos = reembolsosRes.data as ReembolsoAcerto[]
+  const resultados: Record<string, FechamentoMes> = {}
+
+  for (const mes of mesesUnicos) {
+    resultados[mes] = calcularComDados(
+      membros,
+      lancamentos.filter((item) => item.data_competencia?.slice(0, 7) === mes),
+      reembolsos.filter((item) => item.data_competencia?.slice(0, 7) === mes),
+    )
+  }
+
+  return resultados
+}
+
+export async function calcularFechamentoDoMes(mesCompetencia: string): Promise<FechamentoMes> {
+  const fechamentos = await calcularFechamentosDoPeriodo([mesCompetencia])
+  const fechamento = fechamentos[mesCompetencia]
+  if (!fechamento) throw new Error('Mês de competência inválido.')
+  return fechamento
 }
