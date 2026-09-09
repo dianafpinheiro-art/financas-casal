@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { mesValido, conferirImportacao } from '@/domain/importacao'
-import { salvarLancamentosNoBanco, getCartoes } from './actions'
+import { salvarLancamentosNoBanco, getCartoes, reconciliarFaturaExistente } from './actions'
 import { extrairTextoPdf } from '@/lib/pdf-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { UploadCloud, CheckCircle2, AlertCircle, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatarCentavosParaReal } from '@/lib/utils/centavos'
+import type { ParsedTransaction, ParseResult } from '@/lib/parser/types'
+
+type Cartao = { id: string; apelido: string }
+type ResultadoImportacao = ParseResult & {
+  mesReferencia: string
+  cartaoId: string
+  arquivoNome: string
+}
+type ResultadoConciliacao = {
+  aplicado: boolean
+  encontrados: number
+  ausentes: ParsedTransaction[]
+  extras: number
+}
 
 export default function ImportarPage() {
   const [file, setFile] = useState<File | null>(null)
@@ -20,9 +34,11 @@ export default function ImportarPage() {
   const [revisado, setRevisado] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const saving = useRef(false)
-  const [cartoes, setCartoes] = useState<any[]>([])
+  const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [resultado, setResultado] = useState<any>(null)
+  const [resultado, setResultado] = useState<ResultadoImportacao | null>(null)
+  const [isReconciling, setIsReconciling] = useState(false)
+  const [conciliacao, setConciliacao] = useState<ResultadoConciliacao | null>(null)
 
   useEffect(() => {
     getCartoes().then(data => {
@@ -35,6 +51,7 @@ export default function ImportarPage() {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0])
       setResultado(null)
+      setConciliacao(null)
     }
   }
 
@@ -92,11 +109,36 @@ export default function ImportarPage() {
       conferirImportacao(json.transacoes, json.total_fatura_cents, json.sem_total)
       toast.success('Fatura lida com sucesso!')
       setResultado({ ...json, mesReferencia, cartaoId, arquivoNome: file.name })
+      setConciliacao(null)
       setRevisado(false)
-    } catch (err: any) {
-      toast.error('Erro ao enviar arquivo: ' + err.message)
+    } catch (err: unknown) {
+      toast.error('Erro ao enviar arquivo: ' + (err instanceof Error ? err.message : 'erro desconhecido'))
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const handleConciliar = async (aplicar: boolean) => {
+    if (!resultado?.transacoes || isReconciling) return
+    setIsReconciling(true)
+    try {
+      const res = await reconciliarFaturaExistente(
+        resultado.transacoes,
+        resultado.cartaoId,
+        resultado.mesReferencia,
+        resultado.arquivoNome,
+        aplicar,
+      )
+      if (!res.success) {
+        toast.error(res.message)
+        return
+      }
+      setConciliacao({ ...res, aplicado: aplicar })
+      toast.success(res.message)
+    } catch (err: unknown) {
+      toast.error('Erro ao conciliar: ' + (err instanceof Error ? err.message : 'erro desconhecido'))
+    } finally {
+      setIsReconciling(false)
     }
   }
 
@@ -126,8 +168,8 @@ export default function ImportarPage() {
       } else {
         toast.error(res.message)
       }
-    } catch (err: any) {
-      toast.error('Erro ao salvar no banco: ' + err.message)
+    } catch (err: unknown) {
+      toast.error('Erro ao salvar no banco: ' + (err instanceof Error ? err.message : 'erro desconhecido'))
     } finally {
       saving.current = false
       setIsSaving(false)
@@ -152,7 +194,7 @@ export default function ImportarPage() {
           <div className="grid md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Cartão de Crédito</label>
-              <Select disabled={isUploading || isSaving} value={cartaoId} onValueChange={(val: any) => { setCartaoId(val); setResultado(null) }}>
+              <Select disabled={isUploading || isSaving} value={cartaoId} onValueChange={(val) => { setCartaoId(val); setResultado(null) }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o Cartão">{cartoes.find(c => c.id === cartaoId)?.apelido ?? 'Selecione o Cartão'}</SelectValue>
                 </SelectTrigger>
@@ -186,7 +228,7 @@ export default function ImportarPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Selecione o Formato</label>
-              <Select disabled={isUploading || isSaving} value={tipo} onValueChange={(val: any) => { setTipo(val); setResultado(null) }}>
+              <Select disabled={isUploading || isSaving} value={tipo} onValueChange={(val) => { setTipo(val as 'generico' | 'elo_ourocard'); setResultado(null) }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Formato do PDF">{tipo === 'elo_ourocard' ? 'Elo Ourocard (Formato Especial)' : 'Genérico (Smiles, Nubank, Itaú)'}</SelectValue>
                 </SelectTrigger>
@@ -272,7 +314,7 @@ export default function ImportarPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {resultado.transacoes?.map((t: any, i: number) => (
+                  {resultado.transacoes?.map((t, i: number) => (
                     <tr key={i} className="hover:bg-muted/50">
                       <td className="p-2">{t.data}</td>
                       <td className="p-2">
@@ -291,6 +333,33 @@ export default function ImportarPage() {
             </div>
 
             <p>Soma dos lançamentos: {formatarCentavosParaReal(conferirImportacao(resultado.transacoes, resultado.total_fatura_cents, resultado.sem_total).soma)}</p>
+            <div className="space-y-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-4">
+              <p className="font-semibold">Já existem lançamentos deste cartão no mês?</p>
+              <p className="text-sm text-muted-foreground">Compare antes de salvar para preservar suas classificações e evitar duplicidades.</p>
+              <Button type="button" variant="outline" disabled={isReconciling || isSaving} onClick={() => handleConciliar(false)}>
+                {isReconciling ? 'Comparando…' : 'Comparar com o que já está no app'}
+              </Button>
+              {conciliacao && (
+                <div className="space-y-2 text-sm">
+                  <p><strong>{conciliacao.encontrados}</strong> encontrados · <strong>{conciliacao.ausentes.length}</strong> ausentes · <strong>{conciliacao.extras}</strong> extras no app</p>
+                  {conciliacao.ausentes.length > 0 && (
+                    <div className="max-h-48 overflow-auto rounded-md border bg-background p-2">
+                      {conciliacao.ausentes.map((item, indice: number) => (
+                        <p key={`${item.data}-${item.valor_cents}-${indice}`}>{item.data} · {item.descricao} · {formatarCentavosParaReal(item.valor_cents)}</p>
+                      ))}
+                    </div>
+                  )}
+                  {!conciliacao.aplicado && (
+                    <Button type="button" disabled={isReconciling || isSaving} onClick={() => handleConciliar(true)}>
+                      {conciliacao.ausentes.length
+                        ? `Incluir ${conciliacao.ausentes.length} ausente(s) e organizar`
+                        : 'Organizar na ordem da fatura'}
+                    </Button>
+                  )}
+                  {conciliacao.aplicado && <p className="font-medium text-emerald-600">Conciliação aplicada.</p>}
+                </div>
+              )}
+            </div>
             {conferirImportacao(resultado.transacoes, resultado.total_fatura_cents, resultado.sem_total).precisaRevisao && (
               <label className="flex gap-2 border border-amber-500 p-3 rounded-md">
                 <input type="checkbox" checked={revisado} disabled={isSaving} onChange={e => setRevisado(e.target.checked)} />
