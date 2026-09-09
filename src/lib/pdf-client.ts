@@ -1,5 +1,7 @@
 'use client'
 
+import { ordenarLinhasPdf } from './pdf-layout'
+
 /**
  * Extração de texto de PDF NO BROWSER (pdf.js) — o PDF nunca sobe pro
  * servidor. Uma fatura de 5,7 MB vira ~30-50 KB de texto, bem abaixo do
@@ -25,20 +27,11 @@ export async function extrairTextoPdf(file: File): Promise<{ paginas: string[] }
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i)
       const content = await page.getTextContent()
-      // Agrupa itens por linha (coordenada Y) pra preservar a estrutura
-      // tabular da fatura — sem isso, data/descrição/valor viram sopa.
-      const linhas = new Map<number, { x: number; str: string }[]>()
-      for (const item of content.items) {
-        if (!('str' in item) || !item.str.trim()) continue
-        const y = Math.round(item.transform[5])
-        if (!linhas.has(y)) linhas.set(y, [])
-        linhas.get(y)!.push({ x: item.transform[4], str: item.str })
-      }
-      const texto = [...linhas.entries()]
-        .sort((a, b) => b[0] - a[0])
-        .map(([, items]) =>
-          items.sort((a, b) => a.x - b.x).map((it) => it.str).join(' '),
-        )
+      const texto = ordenarLinhasPdf(
+        content.items.filter(item => 'str' in item),
+        page.getViewport({ scale: 1 }).width,
+      )
+        .map(linha => linha.items.map(item => item.str).join(' '))
         .join('\n')
       paginas.push(texto)
     }

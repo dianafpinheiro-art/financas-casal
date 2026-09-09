@@ -65,6 +65,7 @@ IGNORE (não extraia):
 - "SALDO ANTERIOR".
 
 FORMATO:
+- Preserve a sequência das linhas recebidas: página por página, coluna esquerda inteira antes da direita, respeitando os blocos de cada cartão. Não ordene por data e não agrupe por estabelecimento ou parcela.
 - "valor" em reais com ponto decimal (ex: 1234.56). Crédito = negativo.
 - "data" exatamente como na fatura.
 - "descricao": copie o texto do lançamento como aparece (não invente, não abrevie, não traduza).
