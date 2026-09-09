@@ -207,7 +207,7 @@ export function ConferenciaClient({
   }
 
   async function apagarDuplicado(item: ConferenciaItem) {
-    const nome = item.merchant || item.descricao
+    const nome = item.descricao
     const confirmou = window.confirm(
       `Apagar este lançamento?\n\n${nome}\n${formatarData(item.data_lancamento)} · ${formatarCentavosParaReal(item.valor)}\n\nEssa ação não pode ser desfeita.`
     )
@@ -353,7 +353,7 @@ export function ConferenciaClient({
                               <Badge className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"><AlertTriangle className="mr-1 h-3 w-3" />Possível duplicidade</Badge>
                               <button
                                 type="button"
-                                aria-label={`Apagar possível duplicidade: ${item.merchant || item.descricao}`}
+                                aria-label={`Apagar possível duplicidade: ${item.descricao}`}
                                 title="Apagar esta cópia"
                                 disabled={excluindo === item.id}
                                 onClick={() => apagarDuplicado(item)}
@@ -364,8 +364,8 @@ export function ConferenciaClient({
                             </>
                           )}
                         </div>
-                        <p className="font-semibold">{item.merchant || item.descricao}</p>
-                        {item.merchant && item.merchant !== item.descricao && <p className="text-xs text-muted-foreground">Na fatura: {item.descricao}</p>}
+                        <p className="font-semibold">{item.descricao}</p>
+                        {item.merchant && item.merchant !== item.descricao && <p className="text-xs text-muted-foreground">Identificação: {item.merchant}</p>}
                         {item.observacao && <p className="mt-1 text-xs text-muted-foreground">Nota: {item.observacao}</p>}
                         {item.eh_extra && <p className="mt-1 text-xs text-muted-foreground">Pago por: {item.pago_por}</p>}
                         <form
