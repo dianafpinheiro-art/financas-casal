@@ -149,6 +149,15 @@ function conciliar(transacoes: ParsedTransaction[], existentes: LinhaExistente[]
         .sort((a, b) => pontuarDescricao(transacao, b.linha) - pontuarDescricao(transacao, a.linha))
     }
 
+    // Último recurso seguro para legados: se o valor ocorre uma única vez entre
+    // os lançamentos ainda disponíveis, ele identifica a linha sem ambiguidade.
+    if (!candidatos.length) {
+      const mesmoValor = disponiveis
+        .map((linha, indice) => ({ linha, indice }))
+        .filter(({ linha }) => linha.valor === transacao.valor_cents)
+      if (mesmoValor.length === 1) candidatos = mesmoValor
+    }
+
     if (!candidatos.length) {
       ausentes.push(transacao)
       continue
