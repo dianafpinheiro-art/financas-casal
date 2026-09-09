@@ -128,13 +128,26 @@ function conciliar(transacoes: ParsedTransaction[], existentes: LinhaExistente[]
   const ausentes: ParsedTransaction[] = []
 
   for (const transacao of transacoes) {
-    const candidatos = disponiveis
+    let candidatos = disponiveis
       .map((linha, indice) => ({ linha, indice }))
       .filter(({ linha }) =>
         linha.data_lancamento?.slice(0, 10) === transacao.data.slice(0, 10) &&
         linha.valor === transacao.valor_cents
       )
       .sort((a, b) => pontuarDescricao(transacao, b.linha) - pontuarDescricao(transacao, a.linha))
+
+    // Importações antigas às vezes ficaram com o dia/ano interpretado de outro
+    // jeito pelo PDF. Quando data+valor não encontram nada, aceitamos o mesmo
+    // valor apenas se a descrição for essencialmente a mesma. Isso preserva a
+    // classificação já conferida sem transformar uma diferença de data em uma
+    // falsa despesa ausente.
+    if (!candidatos.length) {
+      candidatos = disponiveis
+        .map((linha, indice) => ({ linha, indice }))
+        .filter(({ linha }) => linha.valor === transacao.valor_cents)
+        .filter(({ linha }) => pontuarDescricao(transacao, linha) >= 5_000)
+        .sort((a, b) => pontuarDescricao(transacao, b.linha) - pontuarDescricao(transacao, a.linha))
+    }
 
     if (!candidatos.length) {
       ausentes.push(transacao)
