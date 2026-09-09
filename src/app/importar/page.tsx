@@ -118,7 +118,7 @@ export default function ImportarPage() {
     }
   }
 
-  const handleConciliar = async (aplicar: boolean) => {
+  const handleConciliar = async (aplicar: boolean, incluirAusentes = true) => {
     if (!resultado?.transacoes || isReconciling) return
     setIsReconciling(true)
     try {
@@ -128,6 +128,7 @@ export default function ImportarPage() {
         resultado.mesReferencia,
         resultado.arquivoNome,
         aplicar,
+        incluirAusentes,
       )
       if (!res.success) {
         toast.error(res.message)
@@ -350,11 +351,18 @@ export default function ImportarPage() {
                     </div>
                   )}
                   {!conciliacao.aplicado && (
-                    <Button type="button" disabled={isReconciling || isSaving} onClick={() => handleConciliar(true)}>
-                      {conciliacao.ausentes.length
-                        ? `Incluir ${conciliacao.ausentes.length} ausente(s) e organizar`
-                        : 'Organizar na ordem da fatura'}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" disabled={isReconciling || isSaving} onClick={() => handleConciliar(true)}>
+                        {conciliacao.ausentes.length
+                          ? `Incluir ${conciliacao.ausentes.length} ausente(s) e organizar`
+                          : 'Organizar na ordem da fatura'}
+                      </Button>
+                      {conciliacao.ausentes.length > 0 && (
+                        <Button type="button" variant="outline" disabled={isReconciling || isSaving} onClick={() => handleConciliar(true, false)}>
+                          Organizar só os {conciliacao.encontrados} encontrados
+                        </Button>
+                      )}
+                    </div>
                   )}
                   {conciliacao.aplicado && <p className="font-medium text-emerald-600">Conciliação aplicada.</p>}
                 </div>

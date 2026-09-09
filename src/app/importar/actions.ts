@@ -177,6 +177,7 @@ export async function reconciliarFaturaExistente(
   mesReferencia: string,
   arquivoNome: string,
   aplicar: boolean,
+  incluirAusentes = true,
 ) {
   try {
     const supabase = await createClient()
@@ -252,6 +253,8 @@ export async function reconciliarFaturaExistente(
         continue
       }
 
+      if (!incluirAusentes) continue
+
       const regra = regrasAtivas.find((item) =>
         transacao.descricao.toUpperCase().includes(item.merchant.toUpperCase())
       )
@@ -280,7 +283,7 @@ export async function reconciliarFaturaExistente(
     revalidatePath('/conferencia')
     return {
       success: true,
-      message: `${resultado.pares.length} lançamento(s) preservados, ${resultado.ausentes.length} incluído(s) e fatura organizada.`,
+      message: `${resultado.pares.length} lançamento(s) preservados, ${incluirAusentes ? resultado.ausentes.length : 0} incluído(s) e fatura organizada.`,
       encontrados: resultado.pares.length,
       ausentes: resultado.ausentes,
       extras: resultado.extras.length,
