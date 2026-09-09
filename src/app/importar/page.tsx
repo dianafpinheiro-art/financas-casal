@@ -194,7 +194,7 @@ export default function ImportarPage() {
           <div className="grid md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Cartão de Crédito</label>
-              <Select disabled={isUploading || isSaving} value={cartaoId} onValueChange={(val) => { setCartaoId(val); setResultado(null) }}>
+              <Select disabled={isUploading || isSaving} value={cartaoId} onValueChange={(val) => { if (val !== null) setCartaoId(val); setResultado(null) }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o Cartão">{cartoes.find(c => c.id === cartaoId)?.apelido ?? 'Selecione o Cartão'}</SelectValue>
                 </SelectTrigger>
