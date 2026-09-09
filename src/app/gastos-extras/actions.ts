@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentGroupId } from '@/lib/auth/group'
+import { revalidatePath } from 'next/cache'
+import { avancarUmMesDataISO, estaNaMesmaCompetencia } from '@/lib/datas/competencia'
 
 export async function salvarGastoExtra(payload: {
   data_lancamento: string
@@ -25,7 +27,9 @@ export async function salvarGastoExtra(payload: {
       cartao_id: null, // Extra-cartão!
       pago_por_id: membro.id, // O pagador
       data_lancamento: payload.data_lancamento,
-      data_competencia: payload.data_lancamento,
+      // Gastos fora do cartão entram no acerto do mês seguinte, acompanhando
+      // o ciclo de fechamento usado pelo casal.
+      data_competencia: avancarUmMesDataISO(payload.data_lancamento),
       descricao: payload.descricao,
       valor: payload.valor_cents,
       divisao_tipo: payload.divisao_tipo,
@@ -42,8 +46,59 @@ export async function salvarGastoExtra(payload: {
     }
 
     return { success: true, message: "Gasto extra salvo com sucesso!" }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Erro no salvarGastoExtra:", err)
-    return { success: false, message: err.message }
+    return { success: false, message: err instanceof Error ? err.message : "Erro desconhecido" }
+  }
+}
+
+export async function ajustarCompetenciaGastosExtras() {
+  try {
+    const supabase = await createClient()
+    const grupoId = await getCurrentGroupId()
+    const { data, error } = await supabase
+      .from('lancamentos')
+      .select('id, data_lancamento, data_competencia')
+      .eq('grupo_id', grupoId)
+      .is('cartao_id', null)
+      .gte('data_lancamento', '2026-06-01')
+      .order('data_lancamento', { ascending: true })
+
+    if (error) throw error
+
+    // Só desloca registros ainda no mês original. Assim a operação pode ser
+    // repetida com segurança sem empurrar a mesma despesa duas vezes.
+    const pendentes = (data || []).filter((item) =>
+      item.data_lancamento && estaNaMesmaCompetencia(item.data_competencia, item.data_lancamento)
+    )
+
+    const porMes: Record<string, number> = {}
+    for (const item of pendentes) {
+      const novaCompetencia = avancarUmMesDataISO(item.data_lancamento)
+      const { error: updateError } = await supabase
+        .from('lancamentos')
+        .update({ data_competencia: novaCompetencia })
+        .eq('id', item.id)
+        .eq('grupo_id', grupoId)
+        .is('cartao_id', null)
+
+      if (updateError) throw updateError
+      const destino = novaCompetencia.slice(0, 7)
+      porMes[destino] = (porMes[destino] || 0) + 1
+    }
+
+    revalidatePath('/')
+    revalidatePath('/conferencia')
+    revalidatePath('/lancamentos')
+    revalidatePath('/gastos-extras')
+    return { success: true, atualizados: pendentes.length, porMes }
+  } catch (error: unknown) {
+    console.error("Erro ao ajustar competência dos gastos extras:", error)
+    return {
+      success: false,
+      atualizados: 0,
+      porMes: {},
+      message: error instanceof Error ? error.message : "Não foi possível ajustar as despesas extras.",
+    }
   }
 }

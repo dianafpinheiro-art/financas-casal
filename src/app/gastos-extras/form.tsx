@@ -14,11 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { salvarGastoExtra } from "./actions"
+import { ajustarCompetenciaGastosExtras, salvarGastoExtra } from "./actions"
 
 export function GastosExtrasForm({ categorias }: { categorias: { id: string, nome: string }[] }) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAdjusting, setIsAdjusting] = useState(false)
   const [quemPagou, setQuemPagou] = useState<string>("Diana")
   const [divisaoTipo, setDivisaoTipo] = useState<string>("dividir")
   const [pctDiana, setPctDiana] = useState<string>("50")
@@ -77,8 +78,38 @@ export function GastosExtrasForm({ categorias }: { categorias: { id: string, nom
     setIsSubmitting(false)
   }
 
+  async function handleAdjustCompetence() {
+    setIsAdjusting(true)
+    const res = await ajustarCompetenciaGastosExtras()
+    if (res.success) {
+      toast.success(res.atualizados
+        ? `${res.atualizados} despesa(s) movida(s) para o mês seguinte.`
+        : "As despesas extras já estavam no mês correto."
+      )
+      router.refresh()
+    } else {
+      toast.error(res.message || "Não foi possível ajustar as despesas extras.")
+    }
+    setIsAdjusting(false)
+  }
+
   return (
-    <Card className="max-w-2xl border-border/50 bg-card/50 backdrop-blur-sm">
+    <div className="max-w-2xl space-y-4">
+      <Card className="border-violet-500/20 bg-violet-500/5">
+        <CardHeader>
+          <CardTitle className="text-base">Competência no mês seguinte</CardTitle>
+          <CardDescription>
+            A data real do gasto é preservada, mas ele entra no acerto do mês seguinte.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button type="button" variant="outline" onClick={handleAdjustCompetence} disabled={isAdjusting}>
+            {isAdjusting ? "Ajustando…" : "Ajustar despesas antigas (+1 mês)"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader>
         <CardTitle>Novo Gasto</CardTitle>
         <CardDescription>
@@ -200,6 +231,7 @@ export function GastosExtrasForm({ categorias }: { categorias: { id: string, nom
           </Button>
         </form>
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   )
 }
