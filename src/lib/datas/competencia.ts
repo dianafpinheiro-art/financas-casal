@@ -17,7 +17,3 @@ export function avancarUmMesDataISO(data: string) {
 
   return `${anoSeguinte}-${String(mesSeguinte).padStart(2, "0")}-${String(diaAjustado).padStart(2, "0")}`
 }
-
-export function estaNaMesmaCompetencia(dataA: string | null, dataB: string | null) {
-  return Boolean(dataA && dataB && dataA.slice(0, 7) === dataB.slice(0, 7))
-}
